@@ -1,40 +1,38 @@
-import { directionForSegment, directionVector } from "../utils/math";
-import { segmentStart, type PathPoint } from "../game/Path";
-import { PLATFORM_THICKNESS, PLATFORM_WIDTH, VISUAL_CONFIG } from "../config/visual";
-import { fillQuad, toScreen, type ScreenPoint, type WorldPoint } from "./Projection";
-import { withAlpha } from "./Effects";
+import { PLATFORM_THICKNESS, VISUAL_CONFIG } from "../config/visual";
+import type { RoadSegment } from "../game/Road";
+import { fillQuad, toScreen, withAlpha, type ScreenPoint, type WorldPoint } from "./Projection";
 
 // Each segment is real rectangular geometry, not a stroked line: a flat top
-// surface plus two side walls, so the platform reads as a suspended slab
-// with a void beneath it rather than a tube. Corners stay squared — every
-// segment's footprint is extended by half its own width along its own
-// direction, which is what closes the joint with its neighbour without a
-// rounded miter.
+// surface plus two side walls extruded by a rendering-only height, so the
+// platform reads as a suspended slab over a void. The rectangle drawn here
+// is exactly the rectangle isSupported() tests against (game/Collision.ts)
+// — rendering never invents geometry collision doesn't know about.
 export function drawSegment(
   ctx: CanvasRenderingContext2D,
-  pathPoints: PathPoint[],
-  segmentIndex: number,
+  segment: RoadSegment,
   cameraWorld: WorldPoint,
   anchor: ScreenPoint,
-  fade: number,
+  fade = 1,
 ): void {
-  const halfWidth = PLATFORM_WIDTH / 2;
-  const from = segmentStart(pathPoints, segmentIndex);
-  const to = pathPoints[segmentIndex];
-  const dir = directionVector(directionForSegment(segmentIndex));
-  const perp = { x: -dir.y, y: dir.x };
+  const halfWidth = segment.width / 2;
+  const isXAxis = segment.axis === "x";
 
-  const extendedFrom = { x: from.x - dir.x * halfWidth, y: from.y - dir.y * halfWidth };
-  const extendedTo = { x: to.x + dir.x * halfWidth, y: to.y + dir.y * halfWidth };
+  const leftFrom = isXAxis
+    ? { x: segment.startX, z: segment.startZ + halfWidth }
+    : { x: segment.startX + halfWidth, z: segment.startZ };
+  const leftTo = isXAxis
+    ? { x: segment.endX, z: segment.startZ + halfWidth }
+    : { x: segment.startX + halfWidth, z: segment.endZ };
+  const rightFrom = isXAxis
+    ? { x: segment.startX, z: segment.startZ - halfWidth }
+    : { x: segment.startX - halfWidth, z: segment.startZ };
+  const rightTo = isXAxis
+    ? { x: segment.endX, z: segment.startZ - halfWidth }
+    : { x: segment.startX - halfWidth, z: segment.endZ };
 
-  const leftFrom = { x: extendedFrom.x + perp.x * halfWidth, y: extendedFrom.y + perp.y * halfWidth };
-  const leftTo = { x: extendedTo.x + perp.x * halfWidth, y: extendedTo.y + perp.y * halfWidth };
-  const rightFrom = { x: extendedFrom.x - perp.x * halfWidth, y: extendedFrom.y - perp.y * halfWidth };
-  const rightTo = { x: extendedTo.x - perp.x * halfWidth, y: extendedTo.y - perp.y * halfWidth };
+  const at = (point: { x: number; z: number }, height: number) => toScreen({ ...point, height }, cameraWorld, anchor);
 
-  const at = (point: { x: number; y: number }, z: number) => toScreen({ ...point, z }, cameraWorld, anchor);
-
-  // Side walls first — darker, and drawn underneath the top surface's seam.
+  // Side walls first — darker, drawn underneath the top surface's seam.
   ctx.fillStyle = withAlpha(VISUAL_CONFIG.platformSide, fade);
   fillQuad(ctx, at(leftFrom, PLATFORM_THICKNESS), at(leftTo, PLATFORM_THICKNESS), at(leftTo, 0), at(leftFrom, 0));
   fillQuad(ctx, at(rightFrom, PLATFORM_THICKNESS), at(rightTo, PLATFORM_THICKNESS), at(rightTo, 0), at(rightFrom, 0));

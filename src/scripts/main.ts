@@ -1,17 +1,17 @@
-import { LEVEL_01 } from "./levels/level01";
+import { TEST_LEVEL } from "./levels/testLevel";
 import { DISTANCE_PER_BEAT } from "./utils/timing";
+import { GAMEPLAY_CONFIG } from "./config/gameplay";
+import { buildRoadSegments } from "./game/Road";
 import { Game } from "./game/Game";
-import { buildPathPoints } from "./game/Path";
-import { playerDirection, playerPosition } from "./game/Player";
 import { initialCamera, updateCamera } from "./game/Camera";
 import { bindTrigger } from "./game/Input";
 import { render } from "./rendering/Renderer";
-import { PULSE_LIFETIME, type Pulse } from "./rendering/Effects";
 import { startAudioEngine, stopAudioEngine, type AudioEngine } from "./audio/AudioEngine";
 import { scheduleLevel } from "./audio/Sequencer";
-import { playComplete, playFall, playTurnSuccess } from "./audio/SoundEffects";
+import { playClick, playComplete, playFall } from "./audio/SoundEffects";
 
 const MAX_DT = 1 / 20; // clamp large frame gaps (e.g. tab switching) — PLAN.md §25
+const MAX_TRAIL_POINTS = 4000;
 
 const canvasElement = document.querySelector<HTMLCanvasElement>("#game");
 if (canvasElement) {
@@ -19,24 +19,25 @@ if (canvasElement) {
   const context2d = canvas.getContext("2d");
   if (context2d) {
     const ctx = context2d;
-    const pathPoints = buildPathPoints(LEVEL_01, DISTANCE_PER_BEAT);
+
+    const segments = buildRoadSegments(TEST_LEVEL, DISTANCE_PER_BEAT, GAMEPLAY_CONFIG.pathWidth);
+    const finalSegment = segments[segments.length - 1];
 
     let audioEngine: AudioEngine | null = null;
     let camera = initialCamera();
-    let pulses: Pulse[] = [];
+    let trail: { x: number; z: number }[] = [];
     let lastFrameTime = performance.now();
     const idleClockStart = performance.now();
 
-    const game = new Game(LEVEL_01, DISTANCE_PER_BEAT, {
+    const game = new Game(segments, finalSegment, {
       onStart: () => {
         if (audioEngine) stopAudioEngine(audioEngine);
         audioEngine = startAudioEngine();
-        scheduleLevel(audioEngine.context, audioEngine.startTime, LEVEL_01);
+        scheduleLevel(audioEngine.context, audioEngine.startTime, TEST_LEVEL);
+        trail = [];
       },
-      onTurnSuccess: () => {
-        if (audioEngine) playTurnSuccess(audioEngine.context);
-        const position = playerPosition(game.getPlayer(), pathPoints);
-        pulses.push({ x: position.x, y: position.y, age: 0 });
+      onToggle: () => {
+        if (audioEngine) playClick(audioEngine.context);
       },
       onFall: () => {
         if (audioEngine) playFall(audioEngine.context);
@@ -63,27 +64,22 @@ if (canvasElement) {
       lastFrameTime = now;
 
       const snapshot = game.step(dt);
-      const position = playerPosition(snapshot.player, pathPoints);
-      const direction = playerDirection(snapshot.player);
-      camera = updateCamera(camera, position.x, position.y, direction);
 
-      pulses = pulses
-        .map((pulse) => ({ ...pulse, age: pulse.age + dt }))
-        .filter((pulse) => pulse.age < PULSE_LIFETIME);
+      if (snapshot.state === "playing") {
+        trail.push({ x: snapshot.player.x, z: snapshot.player.z });
+        if (trail.length > MAX_TRAIL_POINTS) trail.shift();
+      }
+
+      camera = updateCamera(camera, snapshot.player);
 
       render(ctx, canvas.clientWidth, canvas.clientHeight, {
         state: snapshot.state,
-        level: LEVEL_01,
-        pathPoints,
-        distancePerBeat: DISTANCE_PER_BEAT,
-        segmentIndex: snapshot.player.segmentIndex,
-        distanceIntoSegment: snapshot.player.distanceIntoSegment,
-        playerX: position.x,
-        playerY: position.y,
+        segments,
+        player: snapshot.player,
+        trail,
         camera,
         idlePhase: (now - idleClockStart) / 1000,
         fallProgress: snapshot.state === "falling" ? game.getEndedProgress() : 0,
-        pulses,
       });
 
       requestAnimationFrame(frame);

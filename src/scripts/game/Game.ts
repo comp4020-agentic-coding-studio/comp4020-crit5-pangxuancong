@@ -1,8 +1,9 @@
 import { GAMEPLAY_CONFIG } from "../config/gameplay";
-import { canTurn, isSupported } from "./Collision";
+import { toggleAxis } from "./Axis";
+import { isSupported } from "./Collision";
 import type { GameState } from "./GameState";
-import type { Segment } from "./Level";
 import { initialPlayer, type PlayerRuntime } from "./Player";
+import type { RoadSegment } from "./Road";
 
 export interface GameSnapshot {
   state: GameState;
@@ -11,7 +12,7 @@ export interface GameSnapshot {
 
 export interface GameCallbacks {
   onStart?: () => void;
-  onTurnSuccess?: () => void;
+  onToggle?: () => void;
   onFall?: () => void;
   onComplete?: () => void;
 }
@@ -19,18 +20,18 @@ export interface GameCallbacks {
 const RESTART_DELAY_SECONDS = GAMEPLAY_CONFIG.restartDelayMs / 1000;
 
 // The whole rule set and the whole state machine live here (PLAN.md §20): no
-// DOM, no Canvas, no AudioContext. That separation is what keeps
-// Collision.ts's rules testable without a browser, and keeps every state
-// transition in one place instead of scattered boolean flags.
+// DOM, no Canvas, no AudioContext, and — per the movement correction — no
+// corner-detection window either. A click always toggles the movement axis;
+// whether that was the right moment is decided purely by whether the
+// player's continuous position is still supported afterwards.
 export class Game {
   private state: GameState = "ready";
   private player: PlayerRuntime = initialPlayer();
-  private pendingTurn = false;
   private endedElapsed = 0; // seconds spent in "falling"/"completed" so far
 
   constructor(
-    private readonly level: Segment[],
-    private readonly distancePerBeat: number,
+    private readonly segments: RoadSegment[],
+    private readonly finalSegment: RoadSegment,
     private readonly callbacks: GameCallbacks = {},
   ) {}
 
@@ -48,22 +49,22 @@ export class Game {
     return Math.min(1, this.endedElapsed / RESTART_DELAY_SECONDS);
   }
 
-  // The single entry point for every click/tap/Space press. What it does
-  // depends entirely on the current state — the caller doesn't decide.
+  // The single entry point for every click/tap/Space press. Its effect
+  // depends entirely on the current state.
   trigger(): void {
     if (this.state === "playing") {
-      this.pendingTurn = true;
+      this.player = { ...this.player, axis: toggleAxis(this.player.axis) };
+      this.callbacks.onToggle?.();
       return;
     }
     if (this.state === "ready" || this.state === "restarting") {
       this.player = initialPlayer();
-      this.pendingTurn = false;
       this.endedElapsed = 0;
       this.state = "playing";
       this.callbacks.onStart?.();
     }
     // "falling" and "completed" ignore triggers until the fixed cooldown
-    // promotes them to "restarting" — see step().
+    // promotes them to "restarting".
   }
 
   step(dt: number): GameSnapshot {
@@ -75,40 +76,29 @@ export class Game {
 
     if (this.state !== "playing") return this.snapshot();
 
-    const segment = this.level[this.player.segmentIndex];
-    if (!segment) {
-      this.state = "completed";
-      this.callbacks.onComplete?.();
+    const distance = GAMEPLAY_CONFIG.baseSpeed * dt;
+    const x = this.player.axis === "x" ? this.player.x + distance : this.player.x;
+    const z = this.player.axis === "z" ? this.player.z + distance : this.player.z;
+    this.player = { ...this.player, x, z };
+
+    if (!isSupported(x, z, this.segments, GAMEPLAY_CONFIG.supportForgiveness)) {
+      this.state = "falling";
+      this.callbacks.onFall?.();
       return this.snapshot();
     }
 
-    const segmentLength = segment.beats * this.distancePerBeat;
-    this.player.distanceIntoSegment += GAMEPLAY_CONFIG.baseSpeed * dt;
-    const distanceToCorner = segmentLength - this.player.distanceIntoSegment;
-
-    if (this.pendingTurn) {
-      this.pendingTurn = false;
-      if (canTurn(distanceToCorner)) {
-        this.player.segmentIndex += 1;
-        this.player.distanceIntoSegment = Math.max(0, -distanceToCorner);
-        this.callbacks.onTurnSuccess?.();
-
-        if (this.player.segmentIndex >= this.level.length) {
-          this.state = "completed";
-          this.callbacks.onComplete?.();
-        }
-        return this.snapshot();
-      }
-      // A click outside the turn window is ignored rather than punished or
-      // acted on early — see PLAN.md §6.
-    }
-
-    if (!isSupported(distanceToCorner)) {
-      this.state = "falling";
-      this.callbacks.onFall?.();
+    if (this.hasReachedEnd()) {
+      this.state = "completed";
+      this.callbacks.onComplete?.();
     }
 
     return this.snapshot();
+  }
+
+  private hasReachedEnd(): boolean {
+    return this.finalSegment.axis === "x"
+      ? this.player.x >= this.finalSegment.endX
+      : this.player.z >= this.finalSegment.endZ;
   }
 
   private snapshot(): GameSnapshot {

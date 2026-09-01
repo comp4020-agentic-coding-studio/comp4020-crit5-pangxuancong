@@ -1,22 +1,24 @@
-import { GAMEPLAY_CONFIG } from "../config/gameplay";
+import type { RoadSegment } from "./Road";
 
-// distanceToCorner is signed world-space distance from the player to the
-// next corner along the current segment: positive means "before the
-// corner", negative means "already past it".
-
-// The forgiving turn window (spec §6/§7): a click registers as a valid turn
-// anywhere inside this region, not only at the exact corner pixel.
-export function canTurn(distanceToCorner: number): boolean {
-  return (
-    distanceToCorner <= GAMEPLAY_CONFIG.turnToleranceBefore &&
-    distanceToCorner >= -GAMEPLAY_CONFIG.turnToleranceAfter
-  );
+// The road is an area, not a centerline, and support is checked against
+// world-space (x, z) — never against projected screen coordinates, and
+// never as "was this click near a corner". A point is supported if it falls
+// inside ANY road segment's rectangle, expanded by a small forgiveness
+// margin on every side (PLAN.md's movement correction, §7).
+export function isSupported(x: number, z: number, segments: RoadSegment[], forgiveness: number): boolean {
+  return segments.some((segment) => withinSegment(x, z, segment, forgiveness));
 }
 
-// The player stays supported until they've travelled past the corner beyond
-// even the turn window's forgiveness — beyond that point they've walked off
-// the segment into empty space instead of taking a turn.
-export function isSupported(distanceToCorner: number): boolean {
-  const fallThreshold = -(GAMEPLAY_CONFIG.turnToleranceAfter + GAMEPLAY_CONFIG.supportForgiveness);
-  return distanceToCorner >= fallThreshold;
+function withinSegment(x: number, z: number, segment: RoadSegment, forgiveness: number): boolean {
+  const halfWidth = segment.width / 2 + forgiveness;
+
+  if (segment.axis === "x") {
+    const minX = Math.min(segment.startX, segment.endX) - forgiveness;
+    const maxX = Math.max(segment.startX, segment.endX) + forgiveness;
+    return x >= minX && x <= maxX && Math.abs(z - segment.startZ) <= halfWidth;
+  }
+
+  const minZ = Math.min(segment.startZ, segment.endZ) - forgiveness;
+  const maxZ = Math.max(segment.startZ, segment.endZ) + forgiveness;
+  return z >= minZ && z <= maxZ && Math.abs(x - segment.startX) <= halfWidth;
 }

@@ -1871,3 +1871,76 @@ They finish by performing music.
 The entire experience should emerge from a single interaction:
 
 > **TURN.**
+
+---
+
+# 51. MOVEMENT ARCHITECTURE CORRECTION (supersedes §3/§4/§17/§21/§22/§28/§29 above)
+
+The four-direction clockwise cycle (East → South → West → North) described in
+§3 was wrong: it lets the level loop back on itself, producing nested
+rectangles, self-intersections, and maze-like geometry instead of a
+continuously advancing route.
+
+## Replace it with two-axis forward movement
+
+```ts
+type MovementAxis = "x" | "z";
+```
+
+The player always moves forward (never negative) along exactly one of two
+positive world axes. A click toggles which axis:
+
+```text
+X+ → Z+ → X+ → Z+ → X+ ...
+```
+
+There is no direction vector, no clockwise order, no four-way cycle.
+
+## Continuous position, no snapping
+
+Player position is continuous floating-point `(x, z)`. There is no
+segment-index/distance-into-segment abstraction, and no automatic correction
+after a turn. Clicking early cuts inside a corner; clicking late overshoots
+outside it; either can cost support. A small invisible forgiveness margin is
+allowed on the collision area, never on timing.
+
+## One shared world-space coordinate system
+
+Player, road, collision, and trail all use the same `(x, z)` ground plane.
+Projection into screen space (an isometric `(x, z, height)` → screen
+transform) happens ONLY in the rendering layer. Collision is never computed
+in projected/screen coordinates.
+
+## Road as area, not centerline
+
+```ts
+interface RoadSegment {
+  axis: "x" | "z";
+  startX: number;
+  startZ: number;
+  endX: number;
+  endZ: number;
+  width: number;
+}
+```
+
+Consecutive segments' rectangles overlap slightly (each extended backward
+along its own axis by half its width) to close the joint — never by
+snapping the player.
+
+## Turning is not corner-detection
+
+Remove any `distanceToCorner < tolerance` check. A click always toggles the
+axis, whenever it happens. The game never asks "was this click inside a
+timing window" — it only ever asks "is the player still supported by some
+road segment". Fairness comes from generous collision area, not from a
+separate abstract timing rule.
+
+## Gameplay sandbox
+
+Before layering phases, fading visibility, particles, or elaborate music
+back on: get a single deterministic 8-segment alternating test level (the
+`TEST_LEVEL` in `levels/testLevel.ts`) feeling good, with a plain camera,
+plain platform, and instant restart. The four-phase level design, fog
+horizon, and turn-pulse feedback from §11/§35 are POSTPONED, not deleted —
+they return once the core movement is right.

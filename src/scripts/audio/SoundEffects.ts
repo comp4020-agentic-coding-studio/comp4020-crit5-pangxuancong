@@ -27,9 +27,11 @@ export function playKick(context: AudioContext, time: number): void {
   playTone(context, time, 90, 0.12, "sine", 0.14);
 }
 
-// Fired live, immediately, only on an actual successful turn — the reward
-// is tied to the player's action, not to a pre-scheduled beat (PLAN.md §10).
-export function playTurnSuccess(context: AudioContext): void {
+// Fired live, immediately, on every axis toggle — a click always makes a
+// sound, since a click always does something (toggles the axis). Whether it
+// was the *right* moment is a separate, later question the fall/complete
+// state answers, not this sound.
+export function playClick(context: AudioContext): void {
   playTone(context, context.currentTime, 660, 0.09, "triangle", 0.12);
 }
 
