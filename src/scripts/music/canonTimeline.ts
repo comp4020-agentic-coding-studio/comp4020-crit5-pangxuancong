@@ -68,23 +68,34 @@ export function musicalIntensity(songTime: number, timeline: MusicEvent[]): numb
   return Math.min(1, Math.max(0, songTime / duration));
 }
 
-export interface BassNote {
+export interface ChordEvent {
   time: number;
   duration: number;
-  midiNote: number;
+  midiNotes: number[];
   velocity: number;
 }
 
-// The ACCOMPANIMENT: the famous Canon-in-D ground bass (D-A-B-F#-G-D-G-A),
-// held as long sustained notes rather than a busy walking line — this plays
-// on its own fixed schedule regardless of the player, spanning exactly the
-// same duration as CANON_TIMELINE so the two always line up.
-const GROUND_BASS = [50, 45, 47, 54, 55, 50, 55, 45]; // D3 A2 B2 F#3 G3 D3 G3 A2
-const BASS_REGION_BEATS = timelineDuration(CANON_TIMELINE) / BEAT / GROUND_BASS.length;
+// The ACCOMPANIMENT: the piano's own LEFT HAND — block chords following the
+// Canon-in-D progression (I-V-vi-iii-IV-I-IV-V), played on the piano's own
+// voice, not a separate instrument. This plays on its own fixed schedule
+// regardless of the player, spanning exactly the same duration as
+// CANON_TIMELINE (the right hand — see main.ts, played live by turning) so
+// the two always line up.
+const LEFT_HAND_CHORDS: number[][] = [
+  [50, 54, 57], // D  (D3 F#3 A3)
+  [45, 49, 52], // A  (A2 C#3 E3)
+  [47, 50, 54], // Bm (B2 D3 F#3)
+  [42, 45, 49], // F#m (F#2 A2 C#3)
+  [43, 47, 50], // G  (G2 B2 D3)
+  [50, 54, 57], // D
+  [43, 47, 50], // G
+  [45, 49, 52], // A
+];
+const CHORD_REGION_BEATS = timelineDuration(CANON_TIMELINE) / BEAT / LEFT_HAND_CHORDS.length;
 
-export const CANON_BASS: BassNote[] = GROUND_BASS.map((midiNote, index) => ({
-  time: at(index * BASS_REGION_BEATS),
-  duration: BASS_REGION_BEATS * BEAT,
-  midiNote,
-  velocity: 0.5,
+export const CANON_LEFT_HAND: ChordEvent[] = LEFT_HAND_CHORDS.map((midiNotes, index) => ({
+  time: at(index * CHORD_REGION_BEATS),
+  duration: CHORD_REGION_BEATS * BEAT,
+  midiNotes,
+  velocity: 0.42,
 }));

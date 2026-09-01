@@ -64,57 +64,44 @@ export function playPianoNote(engine: AudioEngine, time: number, midiNote: numbe
   }
 }
 
-// The accompaniment's ground bass: a sustained, warm low note (two slightly
-// detuned triangles through a lowpass, closer to a cello than a synth
-// pluck) held for its full authored duration — this is what plays on its
-// own fixed schedule while the piano melody waits for the player.
-export function playBassNote(engine: AudioEngine, time: number, duration: number, midiNote: number, velocity: number): void {
-  const frequency = midiToFrequency(midiNote);
-
+// The accompaniment: the piano's own LEFT HAND, playing block chords
+// (music/canonTimeline.ts's CANON_LEFT_HAND) — the same instrument as the
+// player-triggered melody (playPianoNote), just chorded, lower, and softer,
+// on its own fixed schedule while the right hand waits for the player.
+// Each note gets a natural pluck-then-settle envelope rather than a flat
+// organ-like sustain, closer to how a held piano chord actually decays.
+export function playPianoChord(
+  engine: AudioEngine,
+  time: number,
+  duration: number,
+  midiNotes: number[],
+  velocity: number,
+): void {
   const filter = engine.context.createBiquadFilter();
   filter.type = "lowpass";
-  filter.frequency.value = 700;
-  filter.connect(engine.pad);
+  filter.frequency.value = 2000;
+  filter.connect(engine.leftHand);
 
-  const gain = engine.context.createGain();
-  const attack = 0.15;
-  const release = 0.3;
-  const peak = velocity * 0.3;
-  gain.gain.setValueAtTime(0, time);
-  gain.gain.linearRampToValueAtTime(peak, time + attack);
-  gain.gain.setValueAtTime(peak, time + Math.max(attack, duration - release));
-  gain.gain.linearRampToValueAtTime(0, time + duration);
-  gain.connect(filter);
+  const attack = 0.04;
+  const sustainLevel = 0.4; // fraction of peak it settles to before release
 
-  for (const detune of [-4, 4]) {
+  for (const midiNote of midiNotes) {
+    const frequency = midiToFrequency(midiNote);
+    const peak = velocity * 0.22;
+
+    const gain = engine.context.createGain();
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(peak, time + attack);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.001, peak * sustainLevel), time + duration * 0.7);
+    gain.gain.linearRampToValueAtTime(0, time + duration);
+    gain.connect(filter);
+
     const oscillator = engine.context.createOscillator();
     oscillator.type = "triangle";
     oscillator.frequency.setValueAtTime(frequency, time);
-    oscillator.detune.setValueAtTime(detune, time);
     oscillator.connect(gain);
     oscillator.start(time);
     oscillator.stop(time + duration + 0.05);
-  }
-}
-
-// A slow atmospheric pad, sustained under the whole run.
-export function playPad(engine: AudioEngine, startTime: number, durationSeconds: number): void {
-  const chord = [220, 277.18, 329.63];
-  const sustainEnd = startTime + Math.max(2, durationSeconds - 1);
-  const end = startTime + durationSeconds;
-
-  for (const frequency of chord) {
-    const oscillator = engine.context.createOscillator();
-    const gain = engine.context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, startTime);
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(0.045, startTime + 2);
-    gain.gain.setValueAtTime(0.045, sustainEnd);
-    gain.gain.linearRampToValueAtTime(0, end);
-    oscillator.connect(gain).connect(engine.pad);
-    oscillator.start(startTime);
-    oscillator.stop(end + 0.1);
   }
 }
 

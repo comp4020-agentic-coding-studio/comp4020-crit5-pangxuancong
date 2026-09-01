@@ -2,16 +2,18 @@
 // — never setTimeout/requestAnimationFrame's own timer, which would drift
 // against scheduled audio over a multi-minute run.
 //
-// Master mix: the piano line and the sustained pad each have their own
-// gain, plus a reactive bus for live per-turn accents — all routed through
-// one master gain, so no layer can independently run hot, and the whole mix
-// ducks together on a fall (SoundEffects.playFall).
+// Master mix: the right-hand melody (piano, played live by the player) and
+// the left-hand accompaniment (leftHand, scheduled chords) are the same
+// instrument on two separate buses, plus a reactive bus for the completion
+// chime — all routed through one master gain, so no layer can
+// independently run hot, and the whole mix ducks together on a fall
+// (SoundEffects.playFall).
 export interface AudioEngine {
   context: AudioContext;
   startTime: number;
   master: GainNode;
   piano: GainNode;
-  pad: GainNode;
+  leftHand: GainNode;
   reactive: GainNode;
 }
 
@@ -28,15 +30,15 @@ export function startAudioEngine(): AudioEngine {
   piano.gain.value = 0.9;
   piano.connect(master);
 
-  const pad = context.createGain();
-  pad.gain.value = 0.5;
-  pad.connect(master);
+  const leftHand = context.createGain();
+  leftHand.gain.value = 0.55;
+  leftHand.connect(master);
 
   const reactive = context.createGain();
   reactive.gain.value = 0.9;
   reactive.connect(master);
 
-  return { context, startTime: context.currentTime, master, piano, pad, reactive };
+  return { context, startTime: context.currentTime, master, piano, leftHand, reactive };
 }
 
 // Closing the context tears down every node it owns — the reliable way to
