@@ -45,6 +45,7 @@ if (canvasElement) {
     let trail: { x: number; z: number }[] = [];
     let feedback = createFeedbackState();
     let lastFrameTime = performance.now();
+    let lastSongTime = 0;
     const idleClockStart = performance.now();
 
     const teardownAudio = (): void => {
@@ -61,6 +62,7 @@ if (canvasElement) {
         audioEngine = engine;
         sequencerHandle = startSequencer(engine, CANON_TIMELINE, engine.startTime);
         cornerIndex = 0;
+        lastSongTime = 0;
         trail = [];
         feedback = createFeedbackState();
       },
@@ -120,10 +122,24 @@ if (canvasElement) {
     bindTrigger(canvas, handleTrigger);
 
     const frame = (now: number): void => {
-      const dt = Math.min(MAX_DT, (now - lastFrameTime) / 1000);
+      // Gameplay movement must advance on the SAME clock the piano notes are
+      // scheduled against — AudioContext.currentTime — not on
+      // requestAnimationFrame's own timestamps. Two independent clocks drift
+      // against each other over a run; sampling audio time fresh every frame
+      // and using its delta as the physics dt keeps the player's arrival at
+      // a corner locked to the note it was authored against.
+      let gameplayDt: number;
+      let currentSongTime = 0;
+      if (audioEngine) {
+        currentSongTime = songTimeOf(audioEngine);
+        gameplayDt = Math.max(0, Math.min(MAX_DT, currentSongTime - lastSongTime));
+        lastSongTime = currentSongTime;
+      } else {
+        gameplayDt = Math.min(MAX_DT, (now - lastFrameTime) / 1000);
+      }
       lastFrameTime = now;
 
-      const snapshot = game.step(dt);
+      const snapshot = game.step(gameplayDt);
 
       if (snapshot.state === "playing") {
         trail.push({ x: snapshot.player.x, z: snapshot.player.z });
@@ -131,10 +147,10 @@ if (canvasElement) {
       }
 
       camera = updateCamera(camera, snapshot.player);
-      decayFeedback(feedback, dt);
-      updateBackground(background, dt);
+      decayFeedback(feedback, gameplayDt);
+      updateBackground(background, gameplayDt);
 
-      const songTime = audioEngine ? songTimeOf(audioEngine) : 0;
+      const songTime = currentSongTime;
       const beatPulse = audioEngine ? getMusicPulse(CANON_TIMELINE, songTime) : 0;
       const intensity = musicalIntensity(songTime, CANON_TIMELINE);
       const nextCornerTime = cornerTimes[cornerIndex] ?? null;
