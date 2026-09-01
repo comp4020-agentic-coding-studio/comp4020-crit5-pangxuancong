@@ -39,10 +39,23 @@ export interface RenderInput {
 const ANCHOR_Y_RATIO = 0.62;
 const ZOOM_PULSE_MAX = 0.012; // PLAN.md §11: 1.0 -> ~1.012 -> 1.0, never a shake
 
+// Camera lead (game/Camera.ts) is a fixed number of WORLD units, and
+// Projection's base scale is a fixed pixels-per-world-unit constant — so
+// the lead's pixel footprint used to be identical in absolute pixels on
+// every device. That's a small fraction of a wide desktop canvas but most
+// of a narrow phone's width, which is what pushed the road half off
+// screen there. `zoom` already scales every on-screen distance from the
+// anchor uniformly (originally just for the perfect-hit pulse), so reusing
+// it to scale with canvas width fixes both at once: the same world extent
+// now occupies the same PROPORTION of the screen on any device.
+const REFERENCE_WIDTH = 1280; // the desktop width the base projection constants were tuned against
+const MIN_RESPONSIVE_ZOOM = 0.28; // safety floor only — letting this scale freely is the actual fix
+
 export function render(ctx: CanvasRenderingContext2D, width: number, height: number, input: RenderInput): void {
   const anchor = { x: width / 2, y: height * ANCHOR_Y_RATIO };
   const cameraWorld: WorldPoint = { x: input.camera.x, z: input.camera.z };
-  const zoom = 1 + input.cameraPulse * ZOOM_PULSE_MAX;
+  const responsiveZoom = Math.max(MIN_RESPONSIVE_ZOOM, Math.min(1.3, width / REFERENCE_WIDTH));
+  const zoom = responsiveZoom * (1 + input.cameraPulse * ZOOM_PULSE_MAX);
 
   drawBackground(ctx, width, height, cameraWorld, anchor, input.background, input.beatPulse, input.musicalIntensity, zoom);
   drawPlatforms(ctx, input, cameraWorld, anchor, zoom);
