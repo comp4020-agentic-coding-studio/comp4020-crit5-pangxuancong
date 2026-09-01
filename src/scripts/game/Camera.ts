@@ -1,7 +1,7 @@
 import { directionVector, lerp, type Direction } from "../utils/math";
 
 const SMOOTHING = 0.08;
-const LEAD_DISTANCE = 160; // world units of extra space shown ahead of the player
+const LEAD_DISTANCE = 220; // world units of extra space shown ahead of the player
 
 export interface Camera {
   x: number;

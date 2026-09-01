@@ -1,47 +1,36 @@
-import type { Direction } from "../utils/math";
 import { directionForSegment, directionVector } from "../utils/math";
-import { VISUAL_CONFIG } from "../config/visual";
-import type { PathPoint } from "../game/Path";
-import { segmentStart } from "../game/Path";
+import { PLATFORM_THICKNESS, TRAIL_WIDTH, VISUAL_CONFIG } from "../config/visual";
+import { segmentStart, type PathPoint } from "../game/Path";
+import { toScreen, type ScreenPoint, type WorldPoint } from "./Projection";
 
-export type ScreenPoint = { x: number; y: number };
-
-// The trail is the level's own completed geometry, drawn dim — it represents
-// "completed musical history" (PLAN.md §15), not a separate particle system.
+// The trail is deliberately thin against the platform's visual width — it
+// represents "completed musical history" (PLAN.md §15), not a second road.
+// Drawn at platform-top height so it reads as sitting on the surface.
 export function drawTrail(
   ctx: CanvasRenderingContext2D,
   pathPoints: PathPoint[],
   segmentIndex: number,
   distanceIntoSegment: number,
-  toScreen: (point: PathPoint) => ScreenPoint,
-  lineWidth: number,
+  cameraWorld: WorldPoint,
+  anchor: ScreenPoint,
 ): void {
   ctx.strokeStyle = VISUAL_CONFIG.trail;
-  ctx.lineWidth = lineWidth * 0.5;
+  ctx.lineWidth = TRAIL_WIDTH;
   ctx.lineCap = "round";
 
+  const at = (point: { x: number; y: number }) => toScreen({ ...point, z: PLATFORM_THICKNESS }, cameraWorld, anchor);
+
   for (let i = 0; i < segmentIndex; i++) {
-    drawSegment(ctx, segmentStart(pathPoints, i), pathPoints[i], toScreen);
+    drawLine(ctx, at(segmentStart(pathPoints, i)), at(pathPoints[i]));
   }
 
-  const direction: Direction = directionForSegment(segmentIndex);
-  const vector = directionVector(direction);
+  const vector = directionVector(directionForSegment(segmentIndex));
   const start = segmentStart(pathPoints, segmentIndex);
-  const current: PathPoint = {
-    x: start.x + vector.x * distanceIntoSegment,
-    y: start.y + vector.y * distanceIntoSegment,
-  };
-  drawSegment(ctx, start, current, toScreen);
+  const current = { x: start.x + vector.x * distanceIntoSegment, y: start.y + vector.y * distanceIntoSegment };
+  drawLine(ctx, at(start), at(current));
 }
 
-function drawSegment(
-  ctx: CanvasRenderingContext2D,
-  from: PathPoint,
-  to: PathPoint,
-  toScreen: (point: PathPoint) => ScreenPoint,
-): void {
-  const a = toScreen(from);
-  const b = toScreen(to);
+function drawLine(ctx: CanvasRenderingContext2D, a: ScreenPoint, b: ScreenPoint): void {
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);

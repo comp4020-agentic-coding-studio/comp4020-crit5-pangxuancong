@@ -1,4 +1,5 @@
-import { VISUAL_CONFIG } from "../config/visual";
+import { PLATFORM_THICKNESS, VISUAL_CONFIG } from "../config/visual";
+import { toScreen, type ScreenPoint, type WorldPoint } from "./Projection";
 
 export interface Pulse {
   x: number;
@@ -9,16 +10,23 @@ export interface Pulse {
 export const PULSE_LIFETIME = 0.35;
 
 // A pulse answers "did I act correctly?" (PLAN.md §36) — nothing more. One
-// per successful turn, a small brightening ring, gone well before the next.
-export function drawPulses(ctx: CanvasRenderingContext2D, pulses: Pulse[]): void {
+// per successful turn, a small brightening ring at platform-top height,
+// gone well before the next.
+export function drawPulses(
+  ctx: CanvasRenderingContext2D,
+  pulses: Pulse[],
+  cameraWorld: WorldPoint,
+  anchor: ScreenPoint,
+): void {
   for (const pulse of pulses) {
     const t = pulse.age / PULSE_LIFETIME;
     if (t >= 1) continue;
-    const radius = 10 + t * 26;
+    const screen = toScreen({ x: pulse.x, y: pulse.y, z: PLATFORM_THICKNESS }, cameraWorld, anchor);
+    const radius = 8 + t * 20;
     ctx.beginPath();
     ctx.strokeStyle = withAlpha(VISUAL_CONFIG.player, 1 - t);
     ctx.lineWidth = 2;
-    ctx.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
     ctx.stroke();
   }
 }
