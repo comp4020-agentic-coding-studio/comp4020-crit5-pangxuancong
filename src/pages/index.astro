@@ -6,10 +6,10 @@ import "../styles/styles.css";
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>COMP4020 prototype</title>
+    <title>Along the Line</title>
     <meta
       name="description"
-      content="Replace this with one sentence saying what this page is. A search result and a link preview both show it."
+      content="A tap-to-turn rhythm game scored to a synthesized Pachelbel's Canon — no instructions, just play."
     />
 
     <!--
@@ -23,17 +23,14 @@ import "../styles/styles.css";
 
   </head>
   <body>
-    <header>
+    <header class="sr-only">
       <nav aria-label="Primary">
         <a href="./">Home</a>
       </nav>
     </header>
     <main>
-      <h1>COMP4020 prototype</h1>
-      <p>
-        Replace this with your prototype. This week's brief is on the course website;
-        <code>spec/README.md</code> explains how the checks in this repo relate to it.
-      </p>
+      <h1 class="sr-only">Along the Line</h1>
+      <canvas id="game"></canvas>
     </main>
     <script src="../scripts/main.ts"></script>
   </body>
