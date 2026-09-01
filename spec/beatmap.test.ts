@@ -62,9 +62,12 @@ describe("the shipped Canon validation section stays physically playable", () =>
     }
   });
 
-  it("has between 10 and 15 turns, per the validation-section brief", () => {
+  it("turns on every note in the score — no piano attack goes unmatched by a corner", () => {
+    const noteCount = CANON_TIMELINE.filter((event) => event.midiNote !== undefined).length;
+    const turnCount = CANON_TIMELINE.filter((event) => event.turn).length;
+    expect(turnCount).toBe(noteCount);
+
     const { corners } = buildBeatmapRoad(CANON_TIMELINE, GAMEPLAY_CONFIG.baseSpeed, GAMEPLAY_CONFIG.pathWidth);
-    expect(corners.length).toBeGreaterThanOrEqual(10);
-    expect(corners.length).toBeLessThanOrEqual(15);
+    expect(corners).toHaveLength(noteCount - 1);
   });
 });

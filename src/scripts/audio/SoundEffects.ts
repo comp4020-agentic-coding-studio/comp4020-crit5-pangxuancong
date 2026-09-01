@@ -1,4 +1,3 @@
-import type { TimingGrade } from "../game/TurnTiming";
 import type { AudioEngine } from "./AudioEngine";
 
 // All sound is synthesized — no audio assets, nothing to license. Every
@@ -84,22 +83,6 @@ export function playPad(engine: AudioEngine, startTime: number, durationSeconds:
     oscillator.start(startTime);
     oscillator.stop(end + 0.1);
   }
-}
-
-// The reactive accent: fired live on every turn, through its own bus, so a
-// well-timed moment reads as a contribution to the music rather than a
-// sound effect layered on top of it. Pitched an octave above whatever the
-// corner's own note is (PLAN.md §10/§11), so it harmonizes rather than
-// clashing with the piano line already sounding at that moment.
-const ACCENT_GAIN: Record<TimingGrade, number> = {
-  perfect: 0.18,
-  good: 0.12,
-  normal: 0.07,
-};
-
-export function playAccent(engine: AudioEngine, grade: TimingGrade, midiNote = 74): void {
-  const frequency = midiToFrequency(midiNote + 12);
-  playTone(engine.context, engine.reactive, engine.context.currentTime, frequency, 0.16, "sine", ACCENT_GAIN[grade]);
 }
 
 // A brief filtered sweep and a mix duck rather than an instant cut — the run

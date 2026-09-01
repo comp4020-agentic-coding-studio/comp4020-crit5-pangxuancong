@@ -35,7 +35,29 @@ interface AmbientParticle {
 export interface BackgroundState {
   shapes: DistantShape[];
   particles: AmbientParticle[];
+  flowTime: number;
 }
+
+interface FlowBand {
+  yRatio: number; // vertical position as a fraction of canvas height
+  amplitude: number;
+  wavelength: number;
+  speed: number;
+  phaseOffset: number;
+  lineWidth: number;
+  hue: number;
+}
+
+// Purely decorative, screen-space wavy bands drifting sideways — an
+// atmospheric "flowing" layer, sitting in the empty sky above the road
+// (the road itself lives in the lower ~40% of the frame — PLAN.md's
+// atmosphere pass). Not projected through world space: nothing here needs
+// to line up with gameplay geometry.
+const FLOW_BANDS: FlowBand[] = [
+  { yRatio: 0.16, amplitude: 22, wavelength: 340, speed: 14, phaseOffset: 0, lineWidth: 26, hue: 210 },
+  { yRatio: 0.28, amplitude: 16, wavelength: 260, speed: -10, phaseOffset: 1.8, lineWidth: 18, hue: 250 },
+  { yRatio: 0.4, amplitude: 12, wavelength: 200, speed: 8, phaseOffset: 3.4, lineWidth: 14, hue: 190 },
+];
 
 const PADDING = 260;
 const MAX_SHAPES = 14;
@@ -61,7 +83,7 @@ export function createBackgroundState(bounds: Bounds): BackgroundState {
     parallax: 0.3 + Math.random() * 0.2, // mid background — PLAN.md §25
   }));
 
-  return { shapes, particles };
+  return { shapes, particles, flowTime: 0 };
 }
 
 export function updateBackground(state: BackgroundState, dt: number): void {
@@ -69,6 +91,7 @@ export function updateBackground(state: BackgroundState, dt: number): void {
     particle.x += particle.vx * dt;
     particle.z += particle.vz * dt;
   }
+  state.flowTime += dt;
 }
 
 // `intensity` (0..1) mirrors how far into the musical arrangement we are
@@ -87,8 +110,28 @@ export function drawBackground(
   zoom = 1,
 ): void {
   drawGradient(ctx, width, height, beatPulse);
+  drawFlow(ctx, width, height, state.flowTime, beatPulse);
   drawShapes(ctx, state.shapes, cameraWorld, anchor, beatPulse, intensity, zoom);
   drawParticles(ctx, state.particles, cameraWorld, anchor, intensity, zoom);
+}
+
+function drawFlow(ctx: CanvasRenderingContext2D, width: number, height: number, flowTime: number, beatPulse: number): void {
+  for (const band of FLOW_BANDS) {
+    const y = height * band.yRatio;
+    const drift = flowTime * band.speed;
+    const alpha = 0.05 + beatPulse * 0.4;
+
+    ctx.beginPath();
+    ctx.moveTo(-band.wavelength, y);
+    for (let x = -band.wavelength; x <= width + band.wavelength; x += 24) {
+      const wave = Math.sin((x + drift) / band.wavelength * Math.PI * 2 + band.phaseOffset) * band.amplitude;
+      ctx.lineTo(x, y + wave);
+    }
+    ctx.strokeStyle = `hsla(${band.hue}, 60%, 65%, ${alpha})`;
+    ctx.lineWidth = band.lineWidth;
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
 }
 
 function drawGradient(ctx: CanvasRenderingContext2D, width: number, height: number, beatPulse: number): void {

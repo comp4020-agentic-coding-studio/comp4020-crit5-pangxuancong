@@ -23,29 +23,30 @@ function at(beat: number): number {
 // A short (~21s) validation section (PLAN.md §17): an original, simplified
 // piano interpretation of the Canon-in-D harmonic skeleton
 // (I - V - vi - iii - IV - I - IV - V), sparse at the start and denser
-// toward the end. Not every note is a turn — passing notes add piano
-// texture without creating a corner too short to be physically playable.
+// toward the end. Every note is a turn — the smallest gap between notes
+// (0.5 beat = 0.375s) still maps to a segment comfortably longer than the
+// road is wide, so no corner is too short to be physically playable.
 export const CANON_TIMELINE: MusicEvent[] = [
   // I (D) — sparse open
   { time: at(0), midiNote: 62, velocity: 0.7, turn: true, accent: "strong" }, // spawn
-  { time: at(2), midiNote: 66, velocity: 0.4 },
+  { time: at(2), midiNote: 66, velocity: 0.4, turn: true },
   { time: at(4), midiNote: 69, velocity: 0.65, turn: true, accent: "normal" }, // V (A)
-  { time: at(6), midiNote: 66, velocity: 0.4 },
+  { time: at(6), midiNote: 66, velocity: 0.4, turn: true },
   { time: at(8), midiNote: 71, velocity: 0.65, turn: true, accent: "normal" }, // vi (Bm)
   { time: at(10), midiNote: 66, velocity: 0.6, turn: true },
   { time: at(12), midiNote: 61, velocity: 0.65, turn: true, accent: "normal" }, // iii (F#m)
-  { time: at(13), midiNote: 66, velocity: 0.45 },
+  { time: at(13), midiNote: 66, velocity: 0.45, turn: true },
   { time: at(14), midiNote: 69, velocity: 0.6, turn: true },
   { time: at(16), midiNote: 67, velocity: 0.7, turn: true, accent: "strong" }, // IV (G)
   { time: at(17), midiNote: 71, velocity: 0.55, turn: true },
-  { time: at(17.5), midiNote: 74, velocity: 0.4 },
+  { time: at(17.5), midiNote: 74, velocity: 0.4, turn: true },
   { time: at(18), midiNote: 69, velocity: 0.6, turn: true },
   { time: at(19), midiNote: 74, velocity: 0.6, turn: true },
-  { time: at(19.5), midiNote: 71, velocity: 0.4 },
+  { time: at(19.5), midiNote: 71, velocity: 0.4, turn: true },
   { time: at(20), midiNote: 62, velocity: 0.7, turn: true, accent: "strong" }, // I (D) — return
-  { time: at(21), midiNote: 66, velocity: 0.55 },
+  { time: at(21), midiNote: 66, velocity: 0.55, turn: true },
   { time: at(22), midiNote: 69, velocity: 0.6, turn: true },
-  { time: at(22.5), midiNote: 74, velocity: 0.4 },
+  { time: at(22.5), midiNote: 74, velocity: 0.4, turn: true },
   { time: at(24), midiNote: 67, velocity: 0.65, turn: true, accent: "normal" }, // IV (G) — release begins
   { time: at(26), midiNote: 62, velocity: 0.55, turn: true },
   { time: at(28), midiNote: 62, velocity: 0.6, turn: true, accent: "strong" }, // resolution / section end

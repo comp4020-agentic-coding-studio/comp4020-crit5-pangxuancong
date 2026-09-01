@@ -11,7 +11,7 @@ import { render } from "./rendering/Renderer";
 import { createBackgroundState, updateBackground } from "./rendering/Background";
 import { startAudioEngine, stopAudioEngine, type AudioEngine } from "./audio/AudioEngine";
 import { startSequencer, type SequencerHandle } from "./audio/Sequencer";
-import { playAccent, playComplete, playFall } from "./audio/SoundEffects";
+import { playComplete, playFall } from "./audio/SoundEffects";
 import { getMusicPulse } from "./audio/BeatPulse";
 
 // AudioContext.currentTime is the one clock this run reads timing from
@@ -100,22 +100,23 @@ if (canvasElement) {
       game.trigger();
 
       if (wasPlaying && audioEngine) {
-        const engine = audioEngine;
         // Each click during a run corresponds, in order, to the next corner
         // in the beatmap — the player can't skip one (PLAN.md §6). Timing
-        // quality never affects survival, only feedback.
+        // quality never affects survival, only feedback. No sound plays
+        // here: the piano note already scheduled at this moment is the
+        // audio feedback, not a second accent layered on top of it.
         const expected = corners[cornerIndex]?.time;
         const midiNote = corners[cornerIndex]?.midiNote;
         cornerIndex += 1;
 
         if (expected !== undefined) {
-          const errorSeconds = Math.abs(songTimeOf(engine) - expected);
+          const errorSeconds = Math.abs(songTimeOf(audioEngine) - expected);
           const grade: TimingGrade = getTimingGrade(errorSeconds);
-          applyTurnFeedback(
-            feedback,
-            { position: { x: playerBeforeToggle.x, z: playerBeforeToggle.z }, timingGrade: grade, midiNote },
-            (g, note) => playAccent(engine, g, note),
-          );
+          applyTurnFeedback(feedback, {
+            position: { x: playerBeforeToggle.x, z: playerBeforeToggle.z },
+            timingGrade: grade,
+            midiNote,
+          });
         }
       }
     };

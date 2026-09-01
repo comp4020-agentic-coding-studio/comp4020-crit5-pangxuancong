@@ -2,9 +2,12 @@ import { RHYTHM_CONFIG } from "../config/rhythm";
 import { ageParticles, spawnNoteParticles, type NoteParticle } from "../rendering/NoteParticles";
 import type { TimingGrade } from "./TurnTiming";
 
-// Every successful-turn presentation (sound, cube pulse, trail pulse,
-// particles, camera micro-response) is coordinated from this one event —
-// nothing triggers these independently in unrelated modules (PLAN.md §12).
+// Every successful-turn presentation (cube pulse, trail pulse, particles,
+// camera micro-response) is coordinated from this one event — nothing
+// triggers these independently in unrelated modules (PLAN.md §12). There is
+// deliberately no turn sound effect: the piano note already sounding IS the
+// feedback, and a well-timed click should feel like it landed on that note
+// rather than triggering a second, separate sound on top of it.
 export interface TurnEvent {
   position: { x: number; z: number };
   timingGrade: TimingGrade;
@@ -44,13 +47,7 @@ const CUBE_DECAY_RATE = 7; // ~140ms felt duration
 const TRAIL_DECAY_RATE = 5; // ~200ms felt duration
 const CAMERA_DECAY_RATE = 7;
 
-export function applyTurnFeedback(
-  state: FeedbackState,
-  event: TurnEvent,
-  playAccent: (grade: TimingGrade, midiNote?: number) => void,
-): void {
-  playAccent(event.timingGrade, event.midiNote);
-
+export function applyTurnFeedback(state: FeedbackState, event: TurnEvent): void {
   state.cubeScale = Math.max(state.cubeScale, CUBE_SCALE_BY_GRADE[event.timingGrade]);
   const strength = PULSE_STRENGTH_BY_GRADE[event.timingGrade];
   state.trailPulse = Math.max(state.trailPulse, strength);
