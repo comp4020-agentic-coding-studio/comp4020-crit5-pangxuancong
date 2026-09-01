@@ -1,70 +1,68 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-A reading-guide to how the work came together --- a map to your process, not an
-essay about it. Markers read this file and follow its citations; they don't
-trawl the repo for evidence you didn't point at, so if a moment mattered, cite
-it.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and its
-[word counts](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#word-counts)
-cover every deliverable.
+A reading-guide to how this crit's game — a one-button rhythm-navigation
+prototype, working title "Pulse" — came together.
 
 ## What I built
 
-One paragraph: the thing, and the idea behind it.
+A small browser game where the player has exactly one input (click, tap, or
+Space) that turns the travelling player 90 degrees clockwise. The path is a
+deterministic sequence of straight segments; missing a turn — or turning when
+there isn't one — sends the player off the edge. Corner spacing and a
+synthesized kick pulse share one BPM-derived clock, and visibility of the
+upcoming path narrows across four invisible phases so the game shifts from
+mostly-visual to mostly-rhythmic as it goes on. No on-screen instructions
+anywhere: the opening geometry (a long straight run into an obvious first
+corner) is the whole tutorial.
 
 ## The moments that mattered
 
-Three or four for an assignment; fewer is fine for a weekly prototype. Keep the
-list short so each moment has room to do all four jobs:
+1. **Design direction changed mid-build, and the first attempt was thrown
+   away rather than patched.** The first playable pass
+   ([`c94e6b7`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-pangxuancong/commit/c94e6b7))
+   modelled the game as an abstract "click matches the beat or not" state
+   machine with no real 2D movement. After playing it, that abstraction was
+   rejected outright rather than tuned — it didn't produce the feel of
+   actually travelling and turning. Rather than patch it, I reverted it
+   cleanly ([`4d4109e`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-pangxuancong/commit/4d4109e))
+   and rebuilt around real position/direction state
+   ([`c5f0406`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-pangxuancong/commit/c5f0406)),
+   where the player's world position is a derived function of segment index
+   and in-segment progress. `git revert` rather than a manual undo kept the
+   rejected attempt visible in history instead of erasing it.
+2. **Collision was deliberately split into two rules with two different
+   tolerances, not one.** `canTurn` (the forgiving window a click can land
+   in) and `isSupported` (how far past a missed corner the player can travel
+   before actually falling) are separate functions in
+   [`c5f0406`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-pangxuancong/commit/c5f0406)'s
+   `game/Collision.ts`, each independently tunable in
+   `config/gameplay.ts`. The reasoning: a turn window that's too generous
+   would let a badly-timed click still succeed, silently lowering the
+   game's actual difficulty; keeping a separate, more generous forgiveness
+   margin only on the *fail* side means near-misses still cost the round but
+   never feel like the collision system cheated.
+3. **State ownership was centralized in one class instead of scattered
+   flags.** `Game.ts` (also in
+   [`c5f0406`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-pangxuancong/commit/c5f0406))
+   owns the entire `ready → playing → falling/completed → restarting`
+   machine and is the only thing `main.ts` calls `trigger()`/`step()` on;
+   every other module (rendering, audio, camera) only reads its output. This
+   is what let the fall rule and the restart cooldown get focused Vitest
+   coverage (`spec/collision.test.ts`) without touching Canvas or
+   `AudioContext` at all.
 
-1. **what happened** --- the problem, or the thing that went wrong
-2. **what you did instead of the obvious thing** --- the call you made, and why
-   it beat the obvious one
-3. **how you knew it was right** --- the check you ran, the viewport you looked
-   at, what you read before accepting the diff
-4. **the citation** --- a commit or commit range, a `CLAUDE.md` change, a check
-   that went from red to green, a prompt paired with the commit it produced
+## Playtesting
 
-Jobs 2 and 3 are the ones the repo can't tell a reader on its own, so they're
-where the marks are. The strongest moments are the ones where a correction
-landed in the **harness** --- the standards and checks your work has to satisfy
---- rather than in a retry: a rule added to `CLAUDE.md`, a check wired up, an
-attempt thrown away. Retrying until it passes is the routine case, and changing
-what the work runs against is the skilled one.
-
-Cite each moment as a link whose text is the commit hash or range and whose
-target is this repo's commit or compare URL, so a reader clicks straight to the
-evidence:
-
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
-
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
-
-> the prompt, verbatim
-
-Screenshots are welcome where one carries the verification better than a
-sentence does. Commit the file to this repo and link it with a **relative**
-path, which is what makes it render on GitHub: `![alt text](docs/before.png)`.
-Images don't count towards the word count and don't replace the citation.
+TODO — record what an actual playthrough surfaced before the crit: is the
+first corner readable inside ten seconds, is the turn window forgiving
+enough, does the fog-in during phase 3 feel gradual rather than sudden, and
+whether the tuned values in `config/gameplay.ts` (`turnToleranceBefore`,
+`turnToleranceAfter`, `supportForgiveness`) needed adjusting after playing
+the finished build rather than reading the code. Cite the commit that
+changes those numbers once it exists.
 
 ## Before you ship
 
 `pnpm check:evidence` verifies your citations resolve to real commits, that a
 reflection entry the marker reads is in `reflections/`, and that your
-`CLAUDE.md` is there --- before a marker ever opens the file. It checks that
-your map is traceable, not that it is good: the marker judges whether your
-small, deliberately chosen set of moments shows real judgement and reflection. A
-green check is not a substitute for that curation.
-
-Images aren't checked: unlike a citation whose SHA doesn't resolve, a broken
-image is visible the moment this file is rendered on GitHub.
+`CLAUDE.md` is there — before a marker ever opens the file.
