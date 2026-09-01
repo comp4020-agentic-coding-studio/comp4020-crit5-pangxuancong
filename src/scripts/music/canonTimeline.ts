@@ -76,26 +76,30 @@ export interface ChordEvent {
 }
 
 // The ACCOMPANIMENT: the piano's own LEFT HAND — block chords following the
-// Canon-in-D progression (I-V-vi-iii-IV-I-IV-V), played on the piano's own
-// voice, not a separate instrument. This plays on its own fixed schedule
-// regardless of the player, spanning exactly the same duration as
-// CANON_TIMELINE (the right hand — see main.ts, played live by turning) so
-// the two always line up.
-const LEFT_HAND_CHORDS: number[][] = [
-  [50, 54, 57], // D  (D3 F#3 A3)
-  [45, 49, 52], // A  (A2 C#3 E3)
-  [47, 50, 54], // Bm (B2 D3 F#3)
-  [42, 45, 49], // F#m (F#2 A2 C#3)
-  [43, 47, 50], // G  (G2 B2 D3)
-  [50, 54, 57], // D
-  [43, 47, 50], // G
-  [45, 49, 52], // A
+// Canon-in-D progression (I-V-vi-iii-IV-I-IV), played on the piano's own
+// voice, not a separate instrument. Each chord's start/end lines up exactly
+// with where CANON_TIMELINE's own melody changes harmony above (see that
+// array's inline comments: D at beat 0, A at beat 4, Bm at beat 8, F#m at
+// beat 12, G at beat 16, D at beat 20, G at beat 24) — NOT a mechanical
+// "divide the total duration evenly" split, which previously landed chord
+// changes mid-phrase against the melody and made the two hands sound
+// misaligned even though both read the same clock.
+const LEFT_HAND_REGIONS: { startBeat: number; midiNotes: number[] }[] = [
+  { startBeat: 0, midiNotes: [50, 54, 57] }, // D   (D3 F#3 A3)
+  { startBeat: 4, midiNotes: [45, 49, 52] }, // A   (A2 C#3 E3)
+  { startBeat: 8, midiNotes: [47, 50, 54] }, // Bm  (B2 D3 F#3)
+  { startBeat: 12, midiNotes: [42, 45, 49] }, // F#m (F#2 A2 C#3)
+  { startBeat: 16, midiNotes: [43, 47, 50] }, // G   (G2 B2 D3)
+  { startBeat: 20, midiNotes: [50, 54, 57] }, // D   — return
+  { startBeat: 24, midiNotes: [43, 47, 50] }, // G   — release begins, held to the end
 ];
-const CHORD_REGION_BEATS = timelineDuration(CANON_TIMELINE) / BEAT / LEFT_HAND_CHORDS.length;
 
-export const CANON_LEFT_HAND: ChordEvent[] = LEFT_HAND_CHORDS.map((midiNotes, index) => ({
-  time: at(index * CHORD_REGION_BEATS),
-  duration: CHORD_REGION_BEATS * BEAT,
-  midiNotes,
-  velocity: 0.42,
-}));
+export const CANON_LEFT_HAND: ChordEvent[] = LEFT_HAND_REGIONS.map((region, index) => {
+  const nextStartBeat = LEFT_HAND_REGIONS[index + 1]?.startBeat ?? timelineDuration(CANON_TIMELINE) / BEAT;
+  return {
+    time: at(region.startBeat),
+    duration: at(nextStartBeat - region.startBeat),
+    midiNotes: region.midiNotes,
+    velocity: 0.42,
+  };
+});
