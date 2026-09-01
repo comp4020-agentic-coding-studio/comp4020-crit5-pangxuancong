@@ -78,13 +78,26 @@ anywhere: the opening geometry teaches the one mechanic on its own.
 
 ## Playtesting
 
-TODO — record what an actual playthrough surfaced before the crit: is the
-first corner readable inside ten seconds without any text, does the road
-feel fair when a click lands early versus late, does the left-hand/melody
-handoff feel like *playing* the piece rather than just watching it play, and
-which values in `config/gameplay.ts` or `config/rhythm.ts` needed adjusting
-after playing the finished build rather than reading the code. Cite the
-commit that changes those numbers once it exists.
+Playing the finished build (not reading the code) surfaced two things worth
+changing
+([`e9d3193`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-pangxuancong/commit/e9d3193)):
+
+- **The turn felt too tight.** `supportForgiveness` widened from 10 to 18
+  (`config/gameplay.ts`) so a click a little early or late has more room
+  before it costs the round — the road support area, not a timing window,
+  is what decides this, so the fix is a single number rather than new logic.
+- **The piano still read as a clean synth tone**, not a struck string,
+  even after the earlier inharmonicity/hammer-noise pass. Added a detuned
+  unison pair on the fundamental and 2nd partial (two "strings" a few cents
+  apart — the slow beating between them is a big part of what makes a
+  sustained piano note feel alive) and a two-stage decay on those same
+  partials (quick initial drop, then a slower singing tail) instead of one
+  flat exponential ramp, which had been reading as a bell rather than a
+  piano.
+
+Still to check before the crit: is the first corner readable inside ten
+seconds without any text, and does the left-hand/melody handoff feel like
+*playing* the piece rather than watching it play.
 
 ## Before you ship
 
