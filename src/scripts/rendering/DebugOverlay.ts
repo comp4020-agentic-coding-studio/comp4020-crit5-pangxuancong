@@ -1,26 +1,24 @@
-import { getBeatFloat, getBeatIndex, getBeatPhase, getNearestBeatDistance, getSongTime, type RhythmClock } from "../audio/RhythmClock";
-import { RHYTHM_CONFIG } from "../config/rhythm";
 import type { TimingGrade } from "../game/TurnTiming";
 
-// Dev-only synchronization readout (PLAN.md §38) — never present in a
-// production build.
+// Dev-only synchronization readout (PLAN.md §38, adapted for a beatmap
+// timeline rather than a generic BPM grid) — never present in a production
+// build.
 export function drawDebugOverlay(
   ctx: CanvasRenderingContext2D,
-  clock: RhythmClock | null,
+  songTime: number | null,
+  nextCornerTime: number | null,
   lastGrade: TimingGrade | null,
 ): void {
   if (!import.meta.env.DEV) return;
 
-  const lines = clock
-    ? [
-        `bpm ${RHYTHM_CONFIG.bpm}`,
-        `song ${getSongTime(clock).toFixed(2)}s`,
-        `beat ${getBeatIndex(clock)} (${getBeatFloat(clock).toFixed(2)})`,
-        `phase ${getBeatPhase(clock).toFixed(2)}`,
-        `nearest-beat err ${(getNearestBeatDistance(clock) * 1000).toFixed(0)}ms`,
-        `last turn: ${lastGrade ?? "-"}`,
-      ]
-    : [`bpm ${RHYTHM_CONFIG.bpm}`, "audio not started"];
+  const lines =
+    songTime === null
+      ? ["audio not started"]
+      : [
+          `song ${songTime.toFixed(2)}s`,
+          `next corner ${nextCornerTime !== null ? `${nextCornerTime.toFixed(2)}s (in ${(nextCornerTime - songTime).toFixed(2)}s)` : "-"}`,
+          `last turn: ${lastGrade ?? "-"}`,
+        ];
 
   ctx.save();
   ctx.font = "12px monospace";

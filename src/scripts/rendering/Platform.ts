@@ -11,13 +11,14 @@ import { fillQuad, toScreen, withAlpha, type ScreenPoint, type WorldPoint } from
 // `emphasis` (0..1) is the road's only reaction to rhythm — a subtle
 // brightness lift, used for both the global beat pulse and the upcoming
 // corner's anticipation cue (PLAN.md §28/§29). It never changes width or
-// position.
+// position. `zoom` carries the shared perfect-hit zoom pulse (PLAN.md §11).
 export function drawSegment(
   ctx: CanvasRenderingContext2D,
   segment: RoadSegment,
   cameraWorld: WorldPoint,
   anchor: ScreenPoint,
   emphasis = 0,
+  zoom = 1,
 ): void {
   const halfWidth = segment.width / 2;
   const isXAxis = segment.axis === "x";
@@ -35,7 +36,7 @@ export function drawSegment(
     ? { x: segment.endX, z: segment.startZ - halfWidth }
     : { x: segment.startX - halfWidth, z: segment.endZ };
 
-  const at = (point: { x: number; z: number }, height: number) => toScreen({ ...point, height }, cameraWorld, anchor);
+  const at = (point: { x: number; z: number }, height: number) => toScreen({ ...point, height }, cameraWorld, anchor, zoom);
 
   // Side walls first — darker, drawn underneath the top surface's seam.
   ctx.fillStyle = VISUAL_CONFIG.platformSide;

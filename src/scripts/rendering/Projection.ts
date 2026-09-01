@@ -25,15 +25,17 @@ export function project(point: WorldPoint): ScreenPoint {
 }
 
 // Projects a world point relative to the camera's world position, anchored
-// at a fixed screen point. Because the projection above is linear, this is
-// equivalent to projecting (point - camera) — computed directly for clarity
-// at the call sites (Platform.ts, Renderer.ts).
-export function toScreen(point: WorldPoint, cameraWorld: WorldPoint, anchor: ScreenPoint): ScreenPoint {
+// at a fixed screen point. `zoom` (default 1) is the one place a perfect-hit
+// micro zoom pulse (PLAN.md §11) is applied — it scales every point's
+// distance from the anchor uniformly, so the whole frame (background,
+// platforms, trail, player, particles) zooms together rather than one
+// layer moving independently.
+export function toScreen(point: WorldPoint, cameraWorld: WorldPoint, anchor: ScreenPoint, zoom = 1): ScreenPoint {
   const projectedPoint = project(point);
   const projectedCamera = project(cameraWorld);
   return {
-    x: anchor.x + projectedPoint.x - projectedCamera.x,
-    y: anchor.y + projectedPoint.y - projectedCamera.y,
+    x: anchor.x + (projectedPoint.x - projectedCamera.x) * zoom,
+    y: anchor.y + (projectedPoint.y - projectedCamera.y) * zoom,
   };
 }
 

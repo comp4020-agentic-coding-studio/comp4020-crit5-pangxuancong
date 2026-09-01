@@ -8,6 +8,7 @@ import type { TimingGrade } from "./TurnTiming";
 export interface TurnEvent {
   position: { x: number; z: number };
   timingGrade: TimingGrade;
+  midiNote?: number; // the corner's own note — biases particle motion (PLAN.md §10)
 }
 
 export interface FeedbackState {
@@ -28,7 +29,7 @@ const CUBE_SCALE_BY_GRADE: Record<TimingGrade, number> = {
   normal: RHYTHM_CONFIG.feedback.normalCubePulse,
 };
 
-const PULSE_STRENGTH_BY_GRADE: Record<TimingGrade, number> = { perfect: 1, good: 0.7, normal: 0.35 };
+const PULSE_STRENGTH_BY_GRADE: Record<TimingGrade, number> = { perfect: 1, good: 0.65, normal: 0.3 };
 
 const PARTICLE_COUNT_BY_GRADE: Record<TimingGrade, number> = {
   perfect: RHYTHM_CONFIG.particles.perfectCount,
@@ -36,14 +37,19 @@ const PARTICLE_COUNT_BY_GRADE: Record<TimingGrade, number> = {
   normal: RHYTHM_CONFIG.particles.normalCount,
 };
 
-const PULSE_DECAY_RATE = 8; // per second — ~100-180ms felt duration
+// Perfect's cube pulse (~1.20 peak) should read over ~120-160ms; the trail
+// brighten should hold a touch longer (~150-250ms) — two decay rates rather
+// than one shared constant (PLAN.md §11).
+const CUBE_DECAY_RATE = 7; // ~140ms felt duration
+const TRAIL_DECAY_RATE = 5; // ~200ms felt duration
+const CAMERA_DECAY_RATE = 7;
 
 export function applyTurnFeedback(
   state: FeedbackState,
   event: TurnEvent,
-  playAccent: (grade: TimingGrade) => void,
+  playAccent: (grade: TimingGrade, midiNote?: number) => void,
 ): void {
-  playAccent(event.timingGrade);
+  playAccent(event.timingGrade, event.midiNote);
 
   state.cubeScale = Math.max(state.cubeScale, CUBE_SCALE_BY_GRADE[event.timingGrade]);
   const strength = PULSE_STRENGTH_BY_GRADE[event.timingGrade];
@@ -51,13 +57,12 @@ export function applyTurnFeedback(
   state.cameraPulse = Math.max(state.cameraPulse, strength);
   state.lastGrade = event.timingGrade;
 
-  spawnNoteParticles(state.particles, event.position, PARTICLE_COUNT_BY_GRADE[event.timingGrade]);
+  spawnNoteParticles(state.particles, event.position, PARTICLE_COUNT_BY_GRADE[event.timingGrade], event.midiNote);
 }
 
 export function decayFeedback(state: FeedbackState, dt: number): void {
-  const decay = Math.exp(-PULSE_DECAY_RATE * dt);
-  state.cubeScale = 1 + (state.cubeScale - 1) * decay;
-  state.trailPulse *= decay;
-  state.cameraPulse *= decay;
+  state.cubeScale = 1 + (state.cubeScale - 1) * Math.exp(-CUBE_DECAY_RATE * dt);
+  state.trailPulse *= Math.exp(-TRAIL_DECAY_RATE * dt);
+  state.cameraPulse *= Math.exp(-CAMERA_DECAY_RATE * dt);
   ageParticles(state.particles, dt);
 }

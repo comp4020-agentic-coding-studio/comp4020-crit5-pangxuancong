@@ -25,24 +25,47 @@ function playTone(
   oscillator.stop(time + duration + 0.02);
 }
 
-// Layer A — the primary beat: strong but restrained, a touch more presence
-// on the downbeat than the other three.
-export function playKick(engine: AudioEngine, time: number, strength: number): void {
-  playTone(engine.context, engine.drums, time, 92, 0.12, "sine", 0.18 * strength);
+export function midiToFrequency(midiNote: number): number {
+  return 440 * Math.pow(2, (midiNote - 69) / 12);
 }
 
-// Layer B — a small high-frequency transient for timing precision, sitting
-// on the off-beat subdivision rather than doubling the kick.
-export function playClickPerc(engine: AudioEngine, time: number): void {
-  playTone(engine.context, engine.drums, time, 1500, 0.025, "square", 0.025);
+// The piano line — the primary music, scheduled directly from
+// music/canonTimeline.ts. A plucked-string-ish timbre: fundamental plus two
+// quiet upper partials, each with its own quick decay, through a lowpass
+// that softens the harder harmonics — closer to a struck string than a
+// single pure tone.
+export function playPianoNote(engine: AudioEngine, time: number, midiNote: number, velocity: number): void {
+  const fundamental = midiToFrequency(midiNote);
+  const partials: [number, number, number][] = [
+    [1, 1, 0.9], // [harmonic multiple, relative gain, relative decay]
+    [2, 0.35, 0.6],
+    [3, 0.12, 0.4],
+  ];
+
+  const filter = engine.context.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 3200;
+  filter.connect(engine.piano);
+
+  for (const [multiple, relativeGain, relativeDecay] of partials) {
+    const oscillator = engine.context.createOscillator();
+    const gain = engine.context.createGain();
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(fundamental * multiple, time);
+
+    const peak = velocity * relativeGain * 0.5;
+    const duration = 0.7 * relativeDecay;
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(peak, time + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+    oscillator.connect(gain).connect(filter);
+    oscillator.start(time);
+    oscillator.stop(time + duration + 0.05);
+  }
 }
 
-// Layer C — soft low bass, present rather than dominant.
-export function playBass(engine: AudioEngine, time: number): void {
-  playTone(engine.context, engine.bass, time, 55, 0.35, "triangle", 0.09);
-}
-
-// Layer D — slow atmospheric pad, sustained under the whole run.
+// A slow atmospheric pad, sustained under the whole run.
 export function playPad(engine: AudioEngine, startTime: number, durationSeconds: number): void {
   const chord = [220, 277.18, 329.63];
   const sustainEnd = startTime + Math.max(2, durationSeconds - 1);
@@ -54,8 +77,8 @@ export function playPad(engine: AudioEngine, startTime: number, durationSeconds:
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(frequency, startTime);
     gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(0.05, startTime + 2);
-    gain.gain.setValueAtTime(0.05, sustainEnd);
+    gain.gain.linearRampToValueAtTime(0.045, startTime + 2);
+    gain.gain.setValueAtTime(0.045, sustainEnd);
     gain.gain.linearRampToValueAtTime(0, end);
     oscillator.connect(gain).connect(engine.pad);
     oscillator.start(startTime);
@@ -63,18 +86,20 @@ export function playPad(engine: AudioEngine, startTime: number, durationSeconds:
   }
 }
 
-// Layer E — the reactive accent: fired live on every turn, through its own
-// bus, so a well-timed moment reads as a contribution to the music rather
-// than a sound effect layered on top of it.
-const ACCENT_TONE: Record<TimingGrade, { frequency: number; gain: number }> = {
-  perfect: { frequency: 880, gain: 0.16 },
-  good: { frequency: 740, gain: 0.12 },
-  normal: { frequency: 600, gain: 0.08 },
+// The reactive accent: fired live on every turn, through its own bus, so a
+// well-timed moment reads as a contribution to the music rather than a
+// sound effect layered on top of it. Pitched an octave above whatever the
+// corner's own note is (PLAN.md §10/§11), so it harmonizes rather than
+// clashing with the piano line already sounding at that moment.
+const ACCENT_GAIN: Record<TimingGrade, number> = {
+  perfect: 0.18,
+  good: 0.12,
+  normal: 0.07,
 };
 
-export function playAccent(engine: AudioEngine, grade: TimingGrade): void {
-  const { frequency, gain } = ACCENT_TONE[grade];
-  playTone(engine.context, engine.reactive, engine.context.currentTime, frequency, 0.12, "triangle", gain);
+export function playAccent(engine: AudioEngine, grade: TimingGrade, midiNote = 74): void {
+  const frequency = midiToFrequency(midiNote + 12);
+  playTone(engine.context, engine.reactive, engine.context.currentTime, frequency, 0.16, "sine", ACCENT_GAIN[grade]);
 }
 
 // A brief filtered sweep and a mix duck rather than an instant cut — the run

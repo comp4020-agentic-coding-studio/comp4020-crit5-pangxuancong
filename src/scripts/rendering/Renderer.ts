@@ -1,4 +1,3 @@
-import type { RhythmClock } from "../audio/RhythmClock";
 import { PLATFORM_THICKNESS, PLAYER_HEIGHT, PLAYER_SIZE, VISUAL_CONFIG } from "../config/visual";
 import { getAnticipationEmphasis } from "../game/Anticipation";
 import type { GameState } from "../game/GameState";
@@ -15,8 +14,9 @@ import { fillQuad, toScreen, withAlpha, type WorldPoint } from "./Projection";
 export interface RenderInput {
   state: GameState;
   segments: RoadSegment[];
-  cornerTimes: number[]; // absolute song-time each segment's corner falls on; empty before audio starts
+  cornerTimes: number[]; // the expected turn time for each segment's corner, straight from the score
   songTime: number;
+  musicalIntensity: number; // 0..1, how far into the arrangement the environment should read
   player: PlayerRuntime;
   trail: { x: number; z: number }[];
   camera: { x: number; z: number };
@@ -24,28 +24,32 @@ export interface RenderInput {
   fallProgress: number; // 0 (just fell) .. 1 (fully settled)
   cubeScale: number;
   trailPulse: number;
+  cameraPulse: number; // drives the shared zoom pulse (PLAN.md §11)
   particles: NoteParticle[];
   beatPulse: number;
   background: BackgroundState;
-  rhythmClock: RhythmClock | null;
   lastGrade: TimingGrade | null;
+  audioStarted: boolean;
+  nextCornerTime: number | null;
 }
 
 // The player sits in the lower third of the frame, not centred — the camera
 // leads in the direction of travel (game/Camera.ts) so most of the visible
 // space ahead is upcoming road, not travelled trail.
 const ANCHOR_Y_RATIO = 0.62;
+const ZOOM_PULSE_MAX = 0.012; // PLAN.md §11: 1.0 -> ~1.012 -> 1.0, never a shake
 
 export function render(ctx: CanvasRenderingContext2D, width: number, height: number, input: RenderInput): void {
   const anchor = { x: width / 2, y: height * ANCHOR_Y_RATIO };
   const cameraWorld: WorldPoint = { x: input.camera.x, z: input.camera.z };
+  const zoom = 1 + input.cameraPulse * ZOOM_PULSE_MAX;
 
-  drawBackground(ctx, width, height, cameraWorld, anchor, input.background, input.beatPulse);
-  drawPlatforms(ctx, input, cameraWorld, anchor);
-  drawTrail(ctx, input.trail, cameraWorld, anchor, input.trailPulse);
-  drawPlayer(ctx, input, cameraWorld, anchor);
-  drawNoteParticles(ctx, input.particles, cameraWorld, anchor);
-  drawDebugOverlay(ctx, input.rhythmClock, input.lastGrade);
+  drawBackground(ctx, width, height, cameraWorld, anchor, input.background, input.beatPulse, input.musicalIntensity, zoom);
+  drawPlatforms(ctx, input, cameraWorld, anchor, zoom);
+  drawTrail(ctx, input.trail, cameraWorld, anchor, input.trailPulse, zoom);
+  drawPlayer(ctx, input, cameraWorld, anchor, zoom);
+  drawNoteParticles(ctx, input.particles, cameraWorld, anchor, zoom);
+  drawDebugOverlay(ctx, input.audioStarted ? input.songTime : null, input.nextCornerTime, input.lastGrade);
 }
 
 function drawPlatforms(
@@ -53,12 +57,13 @@ function drawPlatforms(
   input: RenderInput,
   cameraWorld: WorldPoint,
   anchor: { x: number; y: number },
+  zoom: number,
 ): void {
   input.segments.forEach((segment, index) => {
     const cornerTime = input.cornerTimes[index];
     const anticipation = cornerTime !== undefined ? getAnticipationEmphasis(cornerTime, input.songTime) : 0;
     const emphasis = Math.max(anticipation, input.beatPulse * 3);
-    drawSegment(ctx, segment, cameraWorld, anchor, emphasis);
+    drawSegment(ctx, segment, cameraWorld, anchor, emphasis, zoom);
   });
 }
 
@@ -67,6 +72,7 @@ function drawPlayer(
   input: RenderInput,
   cameraWorld: WorldPoint,
   anchor: { x: number; y: number },
+  zoom: number,
 ): void {
   const isFalling = input.state === "falling";
   const bob = input.state === "ready" ? Math.sin(input.idlePhase * 3) * 4 : 0;
@@ -82,7 +88,7 @@ function drawPlayer(
   const front = { x: cx + s, z: cz + s };
   const left = { x: cx - s, z: cz + s };
 
-  const at = (point: { x: number; z: number }, height: number) => toScreen({ ...point, height }, cameraWorld, anchor);
+  const at = (point: { x: number; z: number }, height: number) => toScreen({ ...point, height }, cameraWorld, anchor, zoom);
 
   ctx.globalAlpha = alpha;
   ctx.fillStyle = VISUAL_CONFIG.playerSide;

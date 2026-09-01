@@ -16,10 +16,12 @@ export function drawTrail(
   cameraWorld: WorldPoint,
   anchor: ScreenPoint,
   trailPulse: number,
+  zoom = 1,
 ): void {
   if (trail.length < 2) return;
 
-  const at = (point: { x: number; z: number }) => toScreen({ ...point, height: PLATFORM_THICKNESS }, cameraWorld, anchor);
+  const at = (point: { x: number; z: number }) =>
+    toScreen({ ...point, height: PLATFORM_THICKNESS }, cameraWorld, anchor, zoom);
 
   ctx.strokeStyle = VISUAL_CONFIG.trail;
   ctx.lineWidth = TRAIL_WIDTH;

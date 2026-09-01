@@ -1,9 +1,7 @@
-import { TEST_LEVEL } from "./levels/testLevel";
-import { DISTANCE_PER_BEAT } from "./utils/timing";
+import { CANON_TIMELINE, musicalIntensity, timelineDuration } from "./music/canonTimeline";
 import { GAMEPLAY_CONFIG } from "./config/gameplay";
-import { BPM, SECONDS_PER_BEAT } from "./config/audio";
-import { buildRoadSegments, roadBounds } from "./game/Road";
-import { cornerBeatIndices } from "./game/Level";
+import { buildBeatmapRoad } from "./game/Beatmap";
+import { roadBounds } from "./game/Road";
 import { Game } from "./game/Game";
 import { initialCamera, updateCamera } from "./game/Camera";
 import { bindTrigger } from "./game/Input";
@@ -14,8 +12,13 @@ import { createBackgroundState, updateBackground } from "./rendering/Background"
 import { startAudioEngine, stopAudioEngine, type AudioEngine } from "./audio/AudioEngine";
 import { startSequencer, type SequencerHandle } from "./audio/Sequencer";
 import { playAccent, playComplete, playFall } from "./audio/SoundEffects";
-import { createRhythmClock, getNearestBeatDistance, getSongTime, type RhythmClock } from "./audio/RhythmClock";
-import { getBeatPulse } from "./audio/BeatPulse";
+import { getMusicPulse } from "./audio/BeatPulse";
+
+// AudioContext.currentTime is the one clock this run reads timing from
+// (PLAN.md §5) — this is the only place that subtraction happens.
+function songTimeOf(engine: AudioEngine): number {
+  return engine.context.currentTime - engine.startTime;
+}
 
 const MAX_DT = 1 / 20; // clamp large frame gaps (e.g. tab switching) — PLAN.md §25
 const MAX_TRAIL_POINTS = 4000;
@@ -27,15 +30,17 @@ if (canvasElement) {
   if (context2d) {
     const ctx = context2d;
 
-    const segments = buildRoadSegments(TEST_LEVEL, DISTANCE_PER_BEAT, GAMEPLAY_CONFIG.pathWidth);
+    // The level IS the music: every corner's world position comes straight
+    // from the timeline's turn events (PLAN.md's beatmap revision, §1/§2).
+    const { segments, corners } = buildBeatmapRoad(CANON_TIMELINE, GAMEPLAY_CONFIG.baseSpeed, GAMEPLAY_CONFIG.pathWidth);
     const finalSegment = segments[segments.length - 1];
-    const cornerBeats = cornerBeatIndices(TEST_LEVEL);
+    const cornerTimes = corners.map((corner) => corner.time);
+    const songDuration = timelineDuration(CANON_TIMELINE);
     const background = createBackgroundState(roadBounds(segments));
 
     let audioEngine: AudioEngine | null = null;
-    let rhythmClock: RhythmClock | null = null;
     let sequencerHandle: SequencerHandle | null = null;
-    let cornerTimes: number[] = [];
+    let cornerIndex = 0; // the next corner this run's clicks are graded against
     let camera = initialCamera();
     let trail: { x: number; z: number }[] = [];
     let feedback = createFeedbackState();
@@ -47,18 +52,15 @@ if (canvasElement) {
       sequencerHandle = null;
       if (audioEngine) stopAudioEngine(audioEngine);
       audioEngine = null;
-      rhythmClock = null;
-      cornerTimes = [];
     };
 
     const game = new Game(segments, finalSegment, {
       onStart: () => {
-        teardownAudio(); // §36: never let a previous run's nodes/timers survive
+        teardownAudio(); // never let a previous run's nodes/timers survive
         const engine = startAudioEngine();
         audioEngine = engine;
-        rhythmClock = createRhythmClock(engine.context, BPM, engine.startTime);
-        cornerTimes = cornerBeats.map((beatIndex) => engine.startTime + beatIndex * SECONDS_PER_BEAT);
-        sequencerHandle = startSequencer(engine, TEST_LEVEL, engine.startTime);
+        sequencerHandle = startSequencer(engine, CANON_TIMELINE, engine.startTime);
+        cornerIndex = 0;
         trail = [];
         feedback = createFeedbackState();
       },
@@ -95,14 +97,24 @@ if (canvasElement) {
       const playerBeforeToggle = game.getPlayer();
       game.trigger();
 
-      if (wasPlaying && audioEngine && rhythmClock) {
+      if (wasPlaying && audioEngine) {
         const engine = audioEngine;
-        const grade: TimingGrade = getTimingGrade(getNearestBeatDistance(rhythmClock));
-        applyTurnFeedback(
-          feedback,
-          { position: { x: playerBeforeToggle.x, z: playerBeforeToggle.z }, timingGrade: grade },
-          (g) => playAccent(engine, g),
-        );
+        // Each click during a run corresponds, in order, to the next corner
+        // in the beatmap — the player can't skip one (PLAN.md §6). Timing
+        // quality never affects survival, only feedback.
+        const expected = corners[cornerIndex]?.time;
+        const midiNote = corners[cornerIndex]?.midiNote;
+        cornerIndex += 1;
+
+        if (expected !== undefined) {
+          const errorSeconds = Math.abs(songTimeOf(engine) - expected);
+          const grade: TimingGrade = getTimingGrade(errorSeconds);
+          applyTurnFeedback(
+            feedback,
+            { position: { x: playerBeforeToggle.x, z: playerBeforeToggle.z }, timingGrade: grade, midiNote },
+            (g, note) => playAccent(engine, g, note),
+          );
+        }
       }
     };
     bindTrigger(canvas, handleTrigger);
@@ -118,18 +130,21 @@ if (canvasElement) {
         if (trail.length > MAX_TRAIL_POINTS) trail.shift();
       }
 
-      camera = updateCamera(camera, snapshot.player, feedback.cameraPulse);
+      camera = updateCamera(camera, snapshot.player);
       decayFeedback(feedback, dt);
       updateBackground(background, dt);
 
-      const songTime = rhythmClock ? getSongTime(rhythmClock) : 0;
-      const beatPulse = rhythmClock ? getBeatPulse(rhythmClock) : 0;
+      const songTime = audioEngine ? songTimeOf(audioEngine) : 0;
+      const beatPulse = audioEngine ? getMusicPulse(CANON_TIMELINE, songTime) : 0;
+      const intensity = musicalIntensity(songTime, CANON_TIMELINE);
+      const nextCornerTime = cornerTimes[cornerIndex] ?? null;
 
       render(ctx, canvas.clientWidth, canvas.clientHeight, {
         state: snapshot.state,
         segments,
         cornerTimes,
         songTime,
+        musicalIntensity: intensity,
         player: snapshot.player,
         trail,
         camera,
@@ -137,16 +152,20 @@ if (canvasElement) {
         fallProgress: snapshot.state === "falling" ? game.getEndedProgress() : 0,
         cubeScale: feedback.cubeScale,
         trailPulse: feedback.trailPulse,
+        cameraPulse: feedback.cameraPulse,
         particles: feedback.particles,
         beatPulse,
         background,
-        rhythmClock,
         lastGrade: feedback.lastGrade,
+        audioStarted: audioEngine !== null,
+        nextCornerTime,
       });
 
       requestAnimationFrame(frame);
     };
 
     requestAnimationFrame(frame);
+
+    void songDuration; // reserved for the full 2-3 minute arrangement's resolution arc (PLAN.md §14)
   }
 }
