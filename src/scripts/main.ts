@@ -11,7 +11,7 @@ import { render } from "./rendering/Renderer";
 import { createBackgroundState, updateBackground } from "./rendering/Background";
 import { startAudioEngine, stopAudioEngine, type AudioEngine } from "./audio/AudioEngine";
 import { startSequencer, type SequencerHandle } from "./audio/Sequencer";
-import { playComplete, playFall } from "./audio/SoundEffects";
+import { playComplete, playFall, playPianoNote } from "./audio/SoundEffects";
 import { getMusicPulse } from "./audio/BeatPulse";
 
 // AudioContext.currentTime is the one clock this run reads timing from
@@ -60,7 +60,7 @@ if (canvasElement) {
         teardownAudio(); // never let a previous run's nodes/timers survive
         const engine = startAudioEngine();
         audioEngine = engine;
-        sequencerHandle = startSequencer(engine, CANON_TIMELINE, engine.startTime);
+        sequencerHandle = startSequencer(engine, engine.startTime);
         cornerIndex = 0;
         lastSongTime = 0;
         trail = [];
@@ -100,22 +100,31 @@ if (canvasElement) {
       game.trigger();
 
       if (wasPlaying && audioEngine) {
+        const engine = audioEngine;
         // Each click during a run corresponds, in order, to the next corner
         // in the beatmap — the player can't skip one (PLAN.md §6). Timing
-        // quality never affects survival, only feedback. No sound plays
-        // here: the piano note already scheduled at this moment is the
-        // audio feedback, not a second accent layered on top of it.
-        const expected = corners[cornerIndex]?.time;
-        const midiNote = corners[cornerIndex]?.midiNote;
+        // quality never affects survival, only feedback.
+        const corner = corners[cornerIndex];
         cornerIndex += 1;
 
-        if (expected !== undefined) {
-          const errorSeconds = Math.abs(songTimeOf(audioEngine) - expected);
+        if (corner && corner.midiNote !== undefined) {
+          const currentTime = songTimeOf(engine);
+          const errorSeconds = Math.abs(currentTime - corner.time);
           const grade: TimingGrade = getTimingGrade(errorSeconds);
+
+          // The player supplies the piano melody — this click IS the note.
+          // Quantized to the corner's own expected time when the click comes
+          // early enough (Web Audio can't schedule into the past), so the
+          // melody stays aligned with the accompaniment even if the click
+          // itself lands a little early or late; the timing grade above is
+          // what actually reflects that precision.
+          const playTime = engine.startTime + Math.max(corner.time, currentTime);
+          playPianoNote(engine, playTime, corner.midiNote, corner.velocity);
+
           applyTurnFeedback(feedback, {
             position: { x: playerBeforeToggle.x, z: playerBeforeToggle.z },
             timingGrade: grade,
-            midiNote,
+            midiNote: corner.midiNote,
           });
         }
       }

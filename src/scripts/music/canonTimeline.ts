@@ -20,12 +20,13 @@ function at(beat: number): number {
   return beat * BEAT;
 }
 
-// A short (~21s) validation section (PLAN.md §17): an original, simplified
-// piano interpretation of the Canon-in-D harmonic skeleton
-// (I - V - vi - iii - IV - I - IV - V), sparse at the start and denser
-// toward the end. Every note is a turn — the smallest gap between notes
-// (0.5 beat = 0.375s) still maps to a segment comfortably longer than the
-// road is wide, so no corner is too short to be physically playable.
+// A short (~21s) validation section (PLAN.md §17): the MELODY line of an
+// original, simplified piano interpretation of the Canon-in-D harmonic
+// skeleton (I - V - vi - iii - IV - I - IV - V), sparse at the start and
+// denser toward the end. This is deliberately not auto-played — the player
+// supplies the piano part by turning (audio/Sequencer.ts only schedules the
+// accompaniment below; main.ts plays each melody note live, quantized to
+// its own `time`, when the player turns for it).
 export const CANON_TIMELINE: MusicEvent[] = [
   // I (D) — sparse open
   { time: at(0), midiNote: 62, velocity: 0.7, turn: true, accent: "strong" }, // spawn
@@ -66,3 +67,24 @@ export function musicalIntensity(songTime: number, timeline: MusicEvent[]): numb
   if (duration <= 0) return 0;
   return Math.min(1, Math.max(0, songTime / duration));
 }
+
+export interface BassNote {
+  time: number;
+  duration: number;
+  midiNote: number;
+  velocity: number;
+}
+
+// The ACCOMPANIMENT: the famous Canon-in-D ground bass (D-A-B-F#-G-D-G-A),
+// held as long sustained notes rather than a busy walking line — this plays
+// on its own fixed schedule regardless of the player, spanning exactly the
+// same duration as CANON_TIMELINE so the two always line up.
+const GROUND_BASS = [50, 45, 47, 54, 55, 50, 55, 45]; // D3 A2 B2 F#3 G3 D3 G3 A2
+const BASS_REGION_BEATS = timelineDuration(CANON_TIMELINE) / BEAT / GROUND_BASS.length;
+
+export const CANON_BASS: BassNote[] = GROUND_BASS.map((midiNote, index) => ({
+  time: at(index * BASS_REGION_BEATS),
+  duration: BASS_REGION_BEATS * BEAT,
+  midiNote,
+  velocity: 0.5,
+}));

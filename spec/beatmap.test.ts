@@ -39,7 +39,7 @@ describe("buildBeatmapRoad", () => {
     ];
     const { corners } = buildBeatmapRoad(timeline, 100, 40);
 
-    expect(corners).toEqual([{ time: 1.5, accent: "strong", midiNote: 67 }]);
+    expect(corners).toEqual([{ time: 1.5, accent: "strong", midiNote: 67, velocity: 0.6 }]);
   });
 
   it("ignores passing notes that aren't marked as turns", () => {

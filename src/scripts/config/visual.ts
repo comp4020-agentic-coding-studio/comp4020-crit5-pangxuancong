@@ -2,7 +2,6 @@
 // with everything else that isn't core movement feel. This file will grow
 // a visibility horizon again once the four-phase level returns.
 export const VISUAL_CONFIG = {
-  background: "#0a0c12",
   platformTop: "#e7ecf5",
   platformSide: "#3a4050",
   player: "#9be8d8",

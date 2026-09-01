@@ -6,6 +6,7 @@ export interface CornerEvent {
   time: number; // the expected turn time for this corner, straight from the score
   accent: "normal" | "strong";
   midiNote?: number;
+  velocity: number;
 }
 
 export interface Beatmap {
@@ -43,6 +44,7 @@ export function buildBeatmapRoad(timeline: MusicEvent[], playerSpeed: number, wi
       time: turnEvents[i + 1].time,
       accent: turnEvents[i + 1].accent ?? "normal",
       midiNote: turnEvents[i + 1].midiNote,
+      velocity: turnEvents[i + 1].velocity ?? 0.6,
     });
 
     x = endX;

@@ -54,9 +54,9 @@ interface FlowBand {
 // atmosphere pass). Not projected through world space: nothing here needs
 // to line up with gameplay geometry.
 const FLOW_BANDS: FlowBand[] = [
-  { yRatio: 0.16, amplitude: 22, wavelength: 340, speed: 14, phaseOffset: 0, lineWidth: 26, hue: 210 },
-  { yRatio: 0.28, amplitude: 16, wavelength: 260, speed: -10, phaseOffset: 1.8, lineWidth: 18, hue: 250 },
-  { yRatio: 0.4, amplitude: 12, wavelength: 200, speed: 8, phaseOffset: 3.4, lineWidth: 14, hue: 190 },
+  { yRatio: 0.16, amplitude: 22, wavelength: 340, speed: 14, phaseOffset: 0, lineWidth: 26, hue: 22 }, // amber
+  { yRatio: 0.28, amplitude: 16, wavelength: 260, speed: -10, phaseOffset: 1.8, lineWidth: 18, hue: 350 }, // dusky rose
+  { yRatio: 0.4, amplitude: 12, wavelength: 200, speed: 8, phaseOffset: 3.4, lineWidth: 14, hue: 38 }, // gold
 ];
 
 const PADDING = 260;
@@ -134,12 +134,16 @@ function drawFlow(ctx: CanvasRenderingContext2D, width: number, height: number, 
   }
 }
 
+// A sunset palette — deep dusk at the top, warming through amber toward the
+// horizon — everywhere except the road itself, which keeps its own colors
+// (config/visual.ts) untouched.
 function drawGradient(ctx: CanvasRenderingContext2D, width: number, height: number, beatPulse: number): void {
   const lift = beatPulse * 6; // a few RGB points of lift, never an obvious flash
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, `rgb(${8 + lift}, ${10 + lift}, ${18 + lift})`);
-  gradient.addColorStop(0.55, `rgb(${12 + lift}, ${14 + lift}, ${24 + lift})`);
-  gradient.addColorStop(1, `rgb(${18 + lift}, ${22 + lift}, ${32 + lift})`);
+  gradient.addColorStop(0, `rgb(${38 + lift}, ${18 + lift}, ${28 + lift})`); // dusky violet sky
+  gradient.addColorStop(0.45, `rgb(${72 + lift}, ${32 + lift}, ${30 + lift})`); // warm rose-red
+  gradient.addColorStop(0.8, `rgb(${118 + lift}, ${62 + lift}, ${36 + lift})`); // amber
+  gradient.addColorStop(1, `rgb(${150 + lift}, ${92 + lift}, ${48 + lift})`); // gold horizon
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 }
@@ -165,8 +169,8 @@ function drawShapes(
   zoom: number,
 ): void {
   const visibleCount = Math.max(3, Math.round(3 + (MAX_SHAPES - 3) * intensity));
-  const alpha = (0.1 + beatPulse * 0.08) * (0.6 + intensity * 0.4);
-  ctx.strokeStyle = withAlpha("#8fa4c8", alpha);
+  const alpha = (0.12 + beatPulse * 0.08) * (0.6 + intensity * 0.4);
+  ctx.strokeStyle = withAlpha("#e8a06c", alpha); // warm amber silhouettes
   ctx.lineWidth = 1;
   for (const shape of shapes.slice(0, visibleCount)) {
     const base = parallaxScreen(shape, cameraWorld, anchor, shape.parallax, zoom);
@@ -182,7 +186,7 @@ function drawParticles(
   intensity: number,
   zoom: number,
 ): void {
-  ctx.fillStyle = withAlpha("#c9d6ef", 0.14 + intensity * 0.14);
+  ctx.fillStyle = withAlpha("#f4c98a", 0.14 + intensity * 0.14); // warm floating motes
   for (const particle of particles) {
     const screen = parallaxScreen(particle, cameraWorld, anchor, particle.parallax, zoom);
     ctx.beginPath();
