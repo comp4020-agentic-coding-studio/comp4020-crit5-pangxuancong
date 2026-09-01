@@ -12,7 +12,6 @@ export interface GameSnapshot {
 
 export interface GameCallbacks {
   onStart?: () => void;
-  onToggle?: () => void;
   onFall?: () => void;
   onComplete?: () => void;
 }
@@ -50,11 +49,13 @@ export class Game {
   }
 
   // The single entry point for every click/tap/Space press. Its effect
-  // depends entirely on the current state.
+  // depends entirely on the current state. Rhythm-quality feedback (accent
+  // sound, particles, pulses) is coordinated by the caller, which knows
+  // whether this trigger was a mid-run toggle — see main.ts's TurnFeedback
+  // wiring; this method only ever changes gameplay state.
   trigger(): void {
     if (this.state === "playing") {
       this.player = { ...this.player, axis: toggleAxis(this.player.axis) };
-      this.callbacks.onToggle?.();
       return;
     }
     if (this.state === "ready" || this.state === "restarting") {
@@ -65,6 +66,14 @@ export class Game {
     }
     // "falling" and "completed" ignore triggers until the fixed cooldown
     // promotes them to "restarting".
+  }
+
+  // Forces the run back to "ready" — used only when synchronization can't be
+  // guaranteed (e.g. the tab was hidden mid-run), never by normal gameplay.
+  reset(): void {
+    this.player = initialPlayer();
+    this.endedElapsed = 0;
+    this.state = "ready";
   }
 
   step(dt: number): GameSnapshot {

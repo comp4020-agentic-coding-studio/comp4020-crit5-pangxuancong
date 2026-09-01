@@ -1,0 +1,130 @@
+import { RHYTHM_CONFIG } from "../config/rhythm";
+import { toScreen, withAlpha, type ScreenPoint, type WorldPoint } from "./Projection";
+
+// Three low-cost atmospheric layers (PLAN.md §21-27): a gradient instead of
+// flat black, distant decorative wireframes with no gameplay meaning, and
+// sparse ambient particles — all far lower-contrast than the road, and all
+// using the same parallax trick: scaling the camera offset applied to a
+// layer, not recomputing anything expensive per frame.
+
+export interface Bounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+interface DistantShape {
+  x: number;
+  z: number;
+  width: number;
+  height: number;
+  parallax: number;
+}
+
+interface AmbientParticle {
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+  size: number;
+  parallax: number;
+}
+
+export interface BackgroundState {
+  shapes: DistantShape[];
+  particles: AmbientParticle[];
+}
+
+const PADDING = 260;
+
+export function createBackgroundState(bounds: Bounds): BackgroundState {
+  const width = bounds.maxX - bounds.minX + PADDING * 2;
+  const height = bounds.maxZ - bounds.minZ + PADDING * 2;
+
+  const shapes: DistantShape[] = Array.from({ length: 12 }, () => ({
+    x: bounds.minX - PADDING + Math.random() * width,
+    z: bounds.minZ - PADDING + Math.random() * height,
+    width: 14 + Math.random() * 30,
+    height: 40 + Math.random() * 160,
+    parallax: 0.12 + Math.random() * 0.13, // far background — PLAN.md §25
+  }));
+
+  const particles: AmbientParticle[] = Array.from({ length: RHYTHM_CONFIG.ambience.particleCount }, () => ({
+    x: bounds.minX - PADDING + Math.random() * width,
+    z: bounds.minZ - PADDING + Math.random() * height,
+    vx: (Math.random() - 0.5) * 4,
+    vz: (Math.random() - 0.5) * 4,
+    size: 1 + Math.random() * 1.5,
+    parallax: 0.3 + Math.random() * 0.2, // mid background — PLAN.md §25
+  }));
+
+  return { shapes, particles };
+}
+
+export function updateBackground(state: BackgroundState, dt: number): void {
+  for (const particle of state.particles) {
+    particle.x += particle.vx * dt;
+    particle.z += particle.vz * dt;
+  }
+}
+
+export function drawBackground(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  cameraWorld: WorldPoint,
+  anchor: ScreenPoint,
+  state: BackgroundState,
+  beatPulse: number,
+): void {
+  drawGradient(ctx, width, height, beatPulse);
+  drawShapes(ctx, state.shapes, cameraWorld, anchor, beatPulse);
+  drawParticles(ctx, state.particles, cameraWorld, anchor);
+}
+
+function drawGradient(ctx: CanvasRenderingContext2D, width: number, height: number, beatPulse: number): void {
+  const lift = beatPulse * 6; // a few RGB points of lift, never an obvious flash
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, `rgb(${8 + lift}, ${10 + lift}, ${18 + lift})`);
+  gradient.addColorStop(0.55, `rgb(${12 + lift}, ${14 + lift}, ${24 + lift})`);
+  gradient.addColorStop(1, `rgb(${18 + lift}, ${22 + lift}, ${32 + lift})`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+}
+
+function parallaxScreen(point: { x: number; z: number }, cameraWorld: WorldPoint, anchor: ScreenPoint, parallax: number): ScreenPoint {
+  const scaledCamera: WorldPoint = { x: cameraWorld.x * parallax, z: cameraWorld.z * parallax };
+  return toScreen(point, scaledCamera, anchor);
+}
+
+function drawShapes(
+  ctx: CanvasRenderingContext2D,
+  shapes: DistantShape[],
+  cameraWorld: WorldPoint,
+  anchor: ScreenPoint,
+  beatPulse: number,
+): void {
+  const alpha = 0.1 + beatPulse * 0.08;
+  ctx.strokeStyle = withAlpha("#8fa4c8", alpha);
+  ctx.lineWidth = 1;
+  for (const shape of shapes) {
+    const base = parallaxScreen(shape, cameraWorld, anchor, shape.parallax);
+    ctx.strokeRect(base.x - shape.width / 2, base.y - shape.height, shape.width, shape.height);
+  }
+}
+
+function drawParticles(
+  ctx: CanvasRenderingContext2D,
+  particles: AmbientParticle[],
+  cameraWorld: WorldPoint,
+  anchor: ScreenPoint,
+): void {
+  ctx.fillStyle = withAlpha("#c9d6ef", 0.22);
+  for (const particle of particles) {
+    const screen = parallaxScreen(particle, cameraWorld, anchor, particle.parallax);
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, particle.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}

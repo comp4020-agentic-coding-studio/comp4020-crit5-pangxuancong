@@ -5,6 +5,7 @@ import { lerp } from "../utils/math";
 const SMOOTHING = 0.08;
 const AXIS_LEAD = 220; // world units of lead along the player's current axis
 const DIAGONAL_LEAD = 130; // additional lead along the level's general (+x, +z) direction
+const MICRO_PUSH = 14; // world units of extra forward emphasis at full pulse strength
 
 export interface Camera {
   x: number;
@@ -19,10 +20,15 @@ export function initialCamera(): Camera {
 // level's general forward direction (+x, +z) — the level only ever advances
 // that way, so this keeps more of the upcoming route on screen than a pure
 // per-axis lead would, without zooming out to reveal the whole level.
-export function updateCamera(camera: Camera, player: PlayerRuntime): Camera {
+//
+// `pulse` (0..1, decaying) is the only camera response a correct turn gets:
+// a brief forward emphasis, never a shake, never large enough to disturb
+// path readability (PLAN.md §15).
+export function updateCamera(camera: Camera, player: PlayerRuntime, pulse = 0): Camera {
   const along = axisVector(player.axis);
-  const leadX = along.x * AXIS_LEAD + DIAGONAL_LEAD;
-  const leadZ = along.z * AXIS_LEAD + DIAGONAL_LEAD;
+  const push = MICRO_PUSH * pulse;
+  const leadX = along.x * (AXIS_LEAD + push) + DIAGONAL_LEAD;
+  const leadZ = along.z * (AXIS_LEAD + push) + DIAGONAL_LEAD;
 
   return {
     x: lerp(camera.x, player.x + leadX, SMOOTHING),

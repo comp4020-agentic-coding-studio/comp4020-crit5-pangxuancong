@@ -37,3 +37,19 @@ export function buildRoadSegments(level: LevelSegment[], distancePerBeat: number
 
   return segments;
 }
+
+// World-space bounding box of the whole road — used only to scatter
+// decorative background elements around the level, never for gameplay.
+export function roadBounds(segments: RoadSegment[]): { minX: number; maxX: number; minZ: number; maxZ: number } {
+  let minX = 0;
+  let maxX = 0;
+  let minZ = 0;
+  let maxZ = 0;
+  for (const segment of segments) {
+    minX = Math.min(minX, segment.startX, segment.endX);
+    maxX = Math.max(maxX, segment.startX, segment.endX);
+    minZ = Math.min(minZ, segment.startZ, segment.endZ);
+    maxZ = Math.max(maxZ, segment.startZ, segment.endZ);
+  }
+  return { minX, maxX, minZ, maxZ };
+}

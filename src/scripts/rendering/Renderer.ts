@@ -1,7 +1,13 @@
+import type { RhythmClock } from "../audio/RhythmClock";
+import { PLATFORM_THICKNESS, PLAYER_HEIGHT, PLAYER_SIZE, VISUAL_CONFIG } from "../config/visual";
+import { getAnticipationEmphasis } from "../game/Anticipation";
 import type { GameState } from "../game/GameState";
 import type { PlayerRuntime } from "../game/Player";
 import type { RoadSegment } from "../game/Road";
-import { PLATFORM_THICKNESS, PLAYER_HEIGHT, PLAYER_SIZE, VISUAL_CONFIG } from "../config/visual";
+import type { TimingGrade } from "../game/TurnTiming";
+import { drawBackground, type BackgroundState } from "./Background";
+import { drawDebugOverlay } from "./DebugOverlay";
+import { drawNoteParticles, type NoteParticle } from "./NoteParticles";
 import { drawSegment } from "./Platform";
 import { drawTrail } from "./TrailRenderer";
 import { fillQuad, toScreen, withAlpha, type WorldPoint } from "./Projection";
@@ -9,11 +15,20 @@ import { fillQuad, toScreen, withAlpha, type WorldPoint } from "./Projection";
 export interface RenderInput {
   state: GameState;
   segments: RoadSegment[];
+  cornerTimes: number[]; // absolute song-time each segment's corner falls on; empty before audio starts
+  songTime: number;
   player: PlayerRuntime;
   trail: { x: number; z: number }[];
   camera: { x: number; z: number };
   idlePhase: number;
   fallProgress: number; // 0 (just fell) .. 1 (fully settled)
+  cubeScale: number;
+  trailPulse: number;
+  particles: NoteParticle[];
+  beatPulse: number;
+  background: BackgroundState;
+  rhythmClock: RhythmClock | null;
+  lastGrade: TimingGrade | null;
 }
 
 // The player sits in the lower third of the frame, not centred — the camera
@@ -25,12 +40,26 @@ export function render(ctx: CanvasRenderingContext2D, width: number, height: num
   const anchor = { x: width / 2, y: height * ANCHOR_Y_RATIO };
   const cameraWorld: WorldPoint = { x: input.camera.x, z: input.camera.z };
 
-  ctx.fillStyle = VISUAL_CONFIG.background;
-  ctx.fillRect(0, 0, width, height);
-
-  for (const segment of input.segments) drawSegment(ctx, segment, cameraWorld, anchor);
-  drawTrail(ctx, input.trail, cameraWorld, anchor);
+  drawBackground(ctx, width, height, cameraWorld, anchor, input.background, input.beatPulse);
+  drawPlatforms(ctx, input, cameraWorld, anchor);
+  drawTrail(ctx, input.trail, cameraWorld, anchor, input.trailPulse);
   drawPlayer(ctx, input, cameraWorld, anchor);
+  drawNoteParticles(ctx, input.particles, cameraWorld, anchor);
+  drawDebugOverlay(ctx, input.rhythmClock, input.lastGrade);
+}
+
+function drawPlatforms(
+  ctx: CanvasRenderingContext2D,
+  input: RenderInput,
+  cameraWorld: WorldPoint,
+  anchor: { x: number; y: number },
+): void {
+  input.segments.forEach((segment, index) => {
+    const cornerTime = input.cornerTimes[index];
+    const anticipation = cornerTime !== undefined ? getAnticipationEmphasis(cornerTime, input.songTime) : 0;
+    const emphasis = Math.max(anticipation, input.beatPulse * 3);
+    drawSegment(ctx, segment, cameraWorld, anchor, emphasis);
+  });
 }
 
 function drawPlayer(
@@ -46,7 +75,7 @@ function drawPlayer(
   const topHeight = baseHeight + PLAYER_HEIGHT;
   const alpha = isFalling ? 1 - input.fallProgress : 1;
 
-  const s = PLAYER_SIZE;
+  const s = PLAYER_SIZE * input.cubeScale;
   const { x: cx, z: cz } = input.player;
   const back = { x: cx - s, z: cz - s };
   const right = { x: cx + s, z: cz - s };
