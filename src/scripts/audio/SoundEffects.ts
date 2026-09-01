@@ -57,6 +57,51 @@ function partialFrequency(fundamental: number, harmonic: number): number {
   return fundamental * harmonic * Math.sqrt(1 + INHARMONICITY * harmonic * harmonic);
 }
 
+// Two more cues, added after playtesting found the first pass still read as
+// a clean synth tone rather than a struck string:
+//
+// 3. Unison strings: a piano key sounds 2-3 strings at once, deliberately
+//    a few cents apart — the slow beating between them is a big part of
+//    what makes a sustained piano tone feel alive rather than static. Only
+//    the fundamental and 2nd partial get doubled (higher ones are already
+//    quiet and short enough that it wouldn't be audible).
+// 4. A two-stage decay on those same singing partials: real piano energy
+//    drops quickly right after the strike, then settles into a much
+//    slower "singing" tail — one exponential ramp gives only one decay
+//    rate for the whole note, which reads as a bell rather than a piano.
+const UNISON_DETUNE_CENTS = 3.5;
+const UNISON_HARMONIC_LIMIT = 2;
+
+function scheduleStrikeOscillator(
+  context: AudioContext,
+  destination: AudioNode,
+  time: number,
+  frequency: number,
+  detuneCents: number,
+  peak: number,
+  duration: number,
+  twoStage: boolean,
+): void {
+  const attack = 0.004; // fast hammer-strike attack
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(frequency, time);
+  if (detuneCents !== 0) oscillator.detune.setValueAtTime(detuneCents, time);
+
+  gain.gain.setValueAtTime(0, time);
+  gain.gain.linearRampToValueAtTime(peak, time + attack);
+  if (twoStage) {
+    const kneeLevel = Math.max(0.001, peak * 0.38);
+    gain.gain.exponentialRampToValueAtTime(kneeLevel, time + attack + duration * 0.22);
+  }
+  gain.gain.exponentialRampToValueAtTime(0.001, time + attack + duration);
+
+  oscillator.connect(gain).connect(destination);
+  oscillator.start(time);
+  oscillator.stop(time + attack + duration + 0.05);
+}
+
 // The hammer-strike transient: a few milliseconds of noise, bandpass-tuned
 // near the string's own register, gone almost immediately.
 function playHammerStrike(context: AudioContext, destination: AudioNode, time: number, fundamental: number, velocity: number): void {
@@ -106,20 +151,19 @@ function playPianoTone(
   filter.connect(destination);
 
   for (const [harmonic, relativeGain, relativeDecay] of PIANO_PARTIALS) {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(partialFrequency(fundamental, harmonic), time);
-
+    const frequency = partialFrequency(fundamental, harmonic);
     const peak = velocity * relativeGain * 0.5;
     const duration = 0.85 * relativeDecay * decayScale;
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(peak, time + 0.004); // fast hammer-strike attack
-    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    const singing = harmonic <= UNISON_HARMONIC_LIMIT;
 
-    oscillator.connect(gain).connect(filter);
-    oscillator.start(time);
-    oscillator.stop(time + duration + 0.05);
+    if (singing) {
+      // A detuned pair (two strings), each at half the target peak so the
+      // combined loudness matches a single string.
+      scheduleStrikeOscillator(context, filter, time, frequency, UNISON_DETUNE_CENTS / 2, peak * 0.5, duration, true);
+      scheduleStrikeOscillator(context, filter, time, frequency, -UNISON_DETUNE_CENTS / 2, peak * 0.5, duration, true);
+    } else {
+      scheduleStrikeOscillator(context, filter, time, frequency, 0, peak, duration, false);
+    }
   }
 }
 
